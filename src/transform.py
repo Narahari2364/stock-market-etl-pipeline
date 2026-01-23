@@ -365,7 +365,7 @@ if __name__ == "__main__":
         print(f"✓ API Key found: {api_key[:8]}...{api_key[-4:]}\n")
     
     # Test symbols
-    test_symbols = ["AAPL", "MSFT"]
+    test_symbols = ["AAPL"]
     print(f"Test symbols: {', '.join(test_symbols)}")
     print(f"This will make {len(test_symbols)} API calls with 12-second delays.")
     print(f"Estimated time: ~{len(test_symbols) * 12} seconds\n")
