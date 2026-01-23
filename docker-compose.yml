@@ -5,36 +5,18 @@ services:
     image: postgres:15-alpine
     container_name: stock_market_db
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-stock_market_db}
+      POSTGRES_DB: stock_db
+      POSTGRES_USER: dataengineer
+      POSTGRES_PASSWORD: password123
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U dataengineer"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  etl-pipeline:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: stock_etl_pipeline
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - STOCK_API_KEY=${STOCK_API_KEY}
-      - STOCK_API_URL=${STOCK_API_URL}
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-stock_market_db}
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    command: python -m src.pipeline --symbols AAPL MSFT GOOGL
-
 volumes:
   postgres_data:
-
