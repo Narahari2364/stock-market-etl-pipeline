@@ -6,6 +6,11 @@ analysis-ready pandas DataFrame with derived features and data quality checks.
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
