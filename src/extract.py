@@ -75,7 +75,14 @@ def fetch_stock_data(symbol: str, interval: str = "daily") -> Dict:
         # Parse JSON response
         data = response.json()
         
+        # Print actual response data for debugging
+        print(f"API Response Data: {data}")
+        
         # Check for API errors
+        if "Information" in data:
+            print(f"API Message: {data['Information']}")
+            return None
+        
         if 'Error Message' in data:
             error_msg = f"API Error: {data['Error Message']}"
             print(f"ERROR: {error_msg}")
