@@ -1,165 +1,278 @@
-# Stock Market ETL Pipeline
+# 📈 Stock Market ETL Pipeline
 
-A complete ETL (Extract, Transform, Load) pipeline for processing stock market data from various sources.
+A production-ready ETL (Extract, Transform, Load) pipeline for processing stock market data from Alpha Vantage API into PostgreSQL database. This project demonstrates end-to-end data engineering practices including API integration, data transformation, database operations, and comprehensive error handling.
 
-## Features
+## 📋 Project Overview
 
-- **Extract**: Fetch stock market data from APIs (e.g., Alpha Vantage) or CSV files
-- **Transform**: Clean, standardize, and enrich data with technical indicators
-- **Load**: Store data in databases (PostgreSQL) or file formats (CSV, Parquet)
-- **Pipeline**: Orchestrated ETL workflow with logging and error handling
+This project demonstrates:
 
-## Project Structure
+- **API Integration**: Automated data extraction from Alpha Vantage API with rate limit handling
+- **Data Transformation**: Comprehensive data cleaning, validation, and feature engineering
+- **Database Operations**: SQLAlchemy ORM models and efficient batch loading to PostgreSQL
+- **Pipeline Orchestration**: Complete ETL workflow with logging and error handling
+- **Data Quality**: Automated data validation, outlier detection, and duplicate removal
+- **Technical Indicators**: Calculation of moving averages, volatility metrics, and price analysis
+- **Modular Architecture**: Clean separation of concerns with extract, transform, and load modules
+- **Production Features**: Environment variable management, comprehensive logging, and Docker support
+- **Error Resilience**: Robust error handling with detailed logging and graceful failure recovery
+- **Scalability**: Batch processing with configurable chunk sizes for large datasets
+
+## 🛠️ Technologies Used
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **Python** | 3.9+ | Core programming language |
+| **Pandas** | 2.0+ | Data manipulation and analysis |
+| **NumPy** | 1.24+ | Numerical computations |
+| **SQLAlchemy** | 2.0+ | ORM and database operations |
+| **PostgreSQL** | 15+ | Relational database |
+| **Requests** | 2.31+ | HTTP API calls |
+| **python-dotenv** | 1.0+ | Environment variable management |
+| **Docker** | Latest | Containerization |
+| **PyArrow** | 12.0+ | Parquet file support |
+
+## 📊 Data Features
+
+### Extracted Data
+- **OHLCV Data**: Open, High, Low, Close prices and Volume
+- **Time Series**: Daily stock price data with full historical records
+- **Metadata**: Company information, last refreshed timestamps, timezone data
+
+### Calculated Features
+- **Price Metrics**: Daily change, daily change percentage, price range
+- **Technical Indicators**: 5-day and 20-day moving averages
+- **Volatility Analysis**: Rolling volatility indicators with categorization (Very Low to Very High)
+- **Volume Analysis**: Volume categorization (Low, Medium, High, Very High) using quartiles
+- **Date Components**: Year, month, quarter, day of week, week of year
+- **Boolean Indicators**: Positive/negative day flags
+- **Price vs MA**: Percentage difference between current price and moving averages
+
+## 📂 Project Structure
 
 ```
 stock-market-etl-pipeline/
 ├── src/
-│   ├── __init__.py
-│   ├── extract.py      # Data extraction module
-│   ├── transform.py    # Data transformation module
-│   ├── load.py         # Data loading module
-│   └── pipeline.py     # Main ETL pipeline orchestrator
-├── data/               # Output data files
-├── logs/               # Pipeline logs
-├── config/             # Configuration files
-├── tests/              # Unit tests
-├── dashboard/          # Dashboard files (future)
-├── requirements.txt    # Python dependencies
-├── .env               # Environment variables (not in git)
-├── .env.example       # Example environment variables
-├── .gitignore         # Git ignore rules
-├── docker-compose.yml  # Docker configuration
-└── README.md          # This file
+│   ├── __init__.py              # Package initialization
+│   ├── extract.py               # Alpha Vantage API data extraction
+│   ├── transform.py             # Data cleaning and transformation
+│   ├── load.py                  # PostgreSQL database operations
+│   └── pipeline.py              # Main ETL pipeline orchestrator
+├── data/                        # Output data files (CSV, Parquet, JSON)
+├── logs/                        # Pipeline execution logs
+├── config/                      # Configuration files
+├── tests/                       # Unit and integration tests
+├── dashboard/                   # Dashboard files (future)
+├── requirements.txt             # Python dependencies
+├── .env                         # Environment variables (gitignored)
+├── .env.example                 # Example environment variables
+├── .gitignore                   # Git ignore rules
+├── docker-compose.yml           # Docker Compose configuration
+└── README.md                    # This file
 ```
 
-## Installation
+## 🚀 Getting Started
 
-1. Clone the repository:
+### Prerequisites
+
+- Python 3.9 or higher
+- PostgreSQL 15 or higher (or Docker for containerized setup)
+- Alpha Vantage API key ([Get one here](https://www.alphavantage.co/support/#api-key))
+- pip (Python package manager)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd stock-market-etl-pipeline
+   ```
+
+2. **Create a virtual environment**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On macOS/Linux
+   # or
+   venv\Scripts\activate  # On Windows
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` file with your credentials:
+   ```env
+   ALPHA_VANTAGE_API_KEY=your_api_key_here
+   DATABASE_URL=postgresql://dataengineer:password123@localhost:5432/stock_db
+   ```
+
+5. **Start PostgreSQL database (using Docker)**
+   ```bash
+   docker-compose up -d
+   ```
+
+### Running the Pipeline
+
+**Interactive Mode** (Recommended for first-time users):
 ```bash
-git clone <repository-url>
-cd stock-market-etl-pipeline
+python -m src.pipeline
 ```
 
-2. Create a virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On macOS/Linux
+The pipeline will:
+- Display API rate limit warnings
+- Allow you to customize stock symbols
+- Show estimated completion time
+- Execute the complete ETL process
+- Display database summary statistics
+
+**Example Output:**
+```
+⚠️  API RATE LIMIT WARNING
+Alpha Vantage API has a rate limit of 5 calls per minute.
+For 5 default stocks: Estimated time: ~60 seconds
+
+Enter stock symbols (comma-separated) or press Enter for default: 
+Proceed with ETL pipeline? (y/n): y
+
+🚀 Starting ETL pipeline...
 ```
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+**Default Stocks**: The pipeline processes 5 major stocks by default:
+- AAPL (Apple)
+- MSFT (Microsoft)
+- GOOGL (Google)
+- TSLA (Tesla)
+- NVDA (NVIDIA)
 
-4. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your API keys and database credentials
-```
+## ⚠️ API Rate Limits
 
-## Configuration
+Alpha Vantage free tier has the following rate limits:
+- **5 API calls per minute**
+- **500 API calls per day**
 
-Edit the `.env` file with your configuration:
+The pipeline automatically handles rate limits by:
+- Implementing 12-second delays between API calls
+- Providing clear warnings about estimated completion times
+- Gracefully handling rate limit errors with informative messages
 
-- `STOCK_API_KEY`: Your API key for stock data provider (e.g., Alpha Vantage)
-- `STOCK_API_URL`: API endpoint URL
-- `DATABASE_URL`: PostgreSQL connection string (format: `postgresql://user:password@host:port/database`)
+**Recommendations:**
+- Use the default 5 stocks for testing
+- For production, consider upgrading to a premium API key
+- Monitor your daily API call usage
+- Implement caching for frequently accessed data
 
-## Usage
+## 📊 Database Schema
 
-### Command Line
+The pipeline creates a `stock_data` table with the following key columns:
 
-Run the pipeline for specific stock symbols:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Primary key (auto-increment) |
+| `symbol` | VARCHAR(10) | Stock symbol (indexed) |
+| `date` | DATE | Trading date (indexed) |
+| `open` | FLOAT | Opening price |
+| `high` | FLOAT | Highest price |
+| `low` | FLOAT | Lowest price |
+| `close` | FLOAT | Closing price |
+| `volume` | BIGINT | Trading volume |
+| `daily_change` | FLOAT | Absolute daily price change |
+| `daily_change_percent` | FLOAT | Percentage daily change |
+| `price_range` | FLOAT | High - Low price range |
+| `price_range_percent` | FLOAT | Price range as percentage |
+| `volatility_indicator` | FLOAT | Rolling volatility metric |
+| `volatility_category` | VARCHAR(20) | Volatility category (Very Low to Very High) |
+| `volume_category` | VARCHAR(20) | Volume category (Low to Very High) |
+| `ma_5` | FLOAT | 5-day moving average |
+| `ma_20` | FLOAT | 20-day moving average |
+| `price_vs_ma5` | FLOAT | Price vs MA5 percentage difference |
+| `price_vs_ma20` | FLOAT | Price vs MA20 percentage difference |
+| `is_positive_day` | BOOLEAN | True if price increased |
+| `is_negative_day` | BOOLEAN | True if price decreased |
+| `year`, `month`, `quarter` | INTEGER | Date components |
+| `day_of_week`, `week_of_year` | INTEGER | Time components |
+| `extracted_at` | DATETIME | Data extraction timestamp |
+| `data_source` | VARCHAR(50) | Data source identifier |
 
-```bash
-python -m src.pipeline --symbols AAPL MSFT GOOGL --format csv
-```
+**Indexes:**
+- Primary key on `id`
+- Index on `symbol`
+- Index on `date`
+- Composite index on `(symbol, date)` for query optimization
 
-Options:
-- `--symbols`: One or more stock symbols (required)
-- `--format`: Output format (`csv` or `parquet`, default: `csv`)
-- `--no-db`: Skip database loading
+## 🔄 Pipeline Flow
 
-### Python API
+The ETL pipeline follows these 4 main steps:
 
-```python
-from src.pipeline import StockETLPipeline
+1. **📥 EXTRACT**
+   - Fetches stock data from Alpha Vantage API
+   - Handles rate limits with configurable delays
+   - Validates API responses and handles errors
+   - Returns structured data dictionaries
 
-# Initialize pipeline
-pipeline = StockETLPipeline(
-    api_key='your_api_key',
-    database_url='postgresql://user:pass@localhost/db'
-)
+2. **🔄 TRANSFORM**
+   - Converts raw API data to pandas DataFrame
+   - Performs data quality checks (nulls, outliers, duplicates)
+   - Validates price logic (high >= low, etc.)
+   - Calculates derived features and technical indicators
+   - Standardizes data format and column ordering
 
-# Run pipeline
-results = pipeline.run(
-    symbols=['AAPL', 'MSFT', 'GOOGL'],
-    output_format='csv',
-    load_to_db=True
-)
-```
+3. **💾 LOAD**
+   - Creates database tables if they don't exist
+   - Loads transformed data to PostgreSQL in batches
+   - Uses efficient batch processing (1000 records per chunk)
+   - Tracks record counts and loading progress
 
-## Data Processing
+4. **📊 SUMMARY**
+   - Retrieves database statistics
+   - Displays total records, unique symbols, date ranges
+   - Shows average metrics (close price, volume, daily change)
+   - Lists all symbols in the database
 
-The pipeline performs the following transformations:
+## 📈 Sample Stocks
 
-1. **Data Cleaning**: Removes null values and outliers
-2. **Standardization**: Normalizes column names and formats
-3. **Enrichment**: Adds calculated fields:
-   - Daily returns
-   - Simple Moving Averages (SMA 20, SMA 50)
-   - Volatility (rolling standard deviation)
-   - High-Low spread
+The pipeline tracks these default stocks (configurable):
 
-## Database Schema
+| Symbol | Company | Sector |
+|--------|---------|--------|
+| **AAPL** | Apple Inc. | Technology |
+| **MSFT** | Microsoft Corporation | Technology |
+| **GOOGL** | Alphabet Inc. | Technology |
+| **TSLA** | Tesla, Inc. | Automotive |
+| **NVDA** | NVIDIA Corporation | Technology |
 
-The pipeline creates a table with the following schema:
+You can customize the stock list when running the pipeline interactively.
 
-```sql
-CREATE TABLE stock_data (
-    date TIMESTAMP NOT NULL,
-    symbol VARCHAR(10) NOT NULL,
-    open DECIMAL(10, 2),
-    high DECIMAL(10, 2),
-    low DECIMAL(10, 2),
-    close DECIMAL(10, 2),
-    volume BIGINT,
-    daily_return DECIMAL(10, 6),
-    sma_20 DECIMAL(10, 2),
-    sma_50 DECIMAL(10, 2),
-    volatility DECIMAL(10, 6),
-    hl_spread DECIMAL(10, 2),
-    PRIMARY KEY (date, symbol)
-);
-```
+## 🎯 Future Enhancements
 
-## Docker
+- [ ] **Apache Airflow Integration**: Schedule and orchestrate pipeline runs with DAGs
+- [ ] **Streamlit Dashboard**: Interactive web dashboard for data visualization and analysis
+- [ ] **Kafka Integration**: Real-time data streaming with Kafka producers/consumers
+- [ ] **Machine Learning Models**: Predictive models for stock price forecasting
+- [ ] **Cloud Deployment**: Deploy to AWS/GCP/Azure with serverless functions
+- [ ] **Comprehensive Testing**: Unit tests, integration tests, and end-to-end test suite
+- [ ] **CI/CD Pipeline**: Automated testing and deployment with GitHub Actions
+- [ ] **Data Validation Framework**: Great Expectations or similar for data quality checks
+- [ ] **Multi-Source Integration**: Support for additional data sources (Yahoo Finance, IEX Cloud)
+- [ ] **Incremental Loading**: Delta/incremental data loading strategies
+- [ ] **Data Lineage Tracking**: Track data transformations and dependencies
+- [ ] **Performance Monitoring**: Metrics and alerting for pipeline health
 
-Run the pipeline using Docker Compose:
+## 👤 Author
 
-```bash
-docker-compose up
-```
+**Your Name**
+- GitHub: [@yourusername](https://github.com/yourusername)
+- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
+- Email: your.email@example.com
 
-## Testing
+## 📝 License
 
-Run tests with pytest:
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-```bash
-pytest tests/
-```
+---
 
-## Logging
-
-Pipeline logs are written to:
-- Console output
-- `logs/pipeline.log` file
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
+**Note**: This project is for educational and portfolio purposes. Always respect API terms of service and rate limits when working with financial data APIs.
