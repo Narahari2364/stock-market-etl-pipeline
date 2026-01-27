@@ -59,7 +59,7 @@ def fetch_stock_data(symbol: str, interval: str = "daily") -> Dict:
         'function': 'TIME_SERIES_DAILY',
         'symbol': symbol.upper(),
         'apikey': api_key,
-        'outputsize': 'full'  # 'compact' for last 100 data points, 'full' for all available
+        'outputsize': 'compact'  # 'compact' for last 100 data points, 'full' for all available
     }
     
     print(f"Requesting data from Alpha Vantage API...")
