@@ -159,6 +159,43 @@ def filter_data(df, selected_symbols, date_range):
     return df_filtered
 
 
+def sample_data_for_chart(df, max_points=1000):
+    """
+    Sample data for chart rendering if dataset is too large.
+    Keeps all data for calculations, but reduces chart points for performance.
+    
+    Args:
+        df: DataFrame to sample
+        max_points: Maximum number of points to show in chart
+    
+    Returns:
+        Sampled DataFrame (or original if small enough)
+    """
+    if len(df) <= max_points:
+        return df
+    
+    # Calculate sampling rate
+    sample_rate = len(df) // max_points
+    
+    # Sample every Nth row
+    df_sampled = df.iloc[::sample_rate].copy()
+    
+    return df_sampled
+
+
+def should_use_scattergl(df):
+    """
+    Determine if scattergl should be used instead of scatter for better performance.
+    
+    Args:
+        df: DataFrame to check
+    
+    Returns:
+        True if scattergl should be used (for large datasets)
+    """
+    return len(df) > 500
+
+
 # Main application
 def main():
     """Main dashboard application."""
@@ -254,6 +291,13 @@ def main():
         # Use cached filtered data
         df_filtered = st.session_state.filtered_data
     
+    # Advanced charts checkbox
+    show_advanced = st.sidebar.checkbox(
+        "Show Advanced Charts",
+        value=False,
+        help="Enable heavy charts like volatility box plots"
+    )
+    
     # Refresh button
     if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
@@ -318,18 +362,28 @@ def main():
     # ============================================
     st.header("📈 Stock Price Chart")
     
-    # Prepare data for chart
+    # Prepare data for chart (sample if large)
     chart_df = df_filtered[['symbol', 'date', 'close', 'ma_5', 'ma_20', 'open', 'high', 'low']].copy()
+    chart_df_sampled = sample_data_for_chart(chart_df, max_points=1000)
+    
+    # Determine if we should use scattergl for better performance
+    use_scattergl = should_use_scattergl(chart_df)
     
     # Create Plotly figure
     fig_price = go.Figure()
     
+    # Use Scattergl or Scatter based on dataset size
+    ScatterClass = go.Scattergl if use_scattergl else go.Scatter
+    
     # Add close price lines for each symbol
     for symbol in selected_symbols:
-        symbol_data = chart_df[chart_df['symbol'] == symbol]
+        symbol_data = chart_df_sampled[chart_df_sampled['symbol'] == symbol]
+        
+        if symbol_data.empty:
+            continue
         
         # Close price line
-        fig_price.add_trace(go.Scatter(
+        fig_price.add_trace(ScatterClass(
             x=symbol_data['date'],
             y=symbol_data['close'],
             mode='lines',
@@ -345,7 +399,7 @@ def main():
         
         # MA5 line
         if 'ma_5' in symbol_data.columns and not symbol_data['ma_5'].isna().all():
-            fig_price.add_trace(go.Scatter(
+            fig_price.add_trace(ScatterClass(
                 x=symbol_data['date'],
                 y=symbol_data['ma_5'],
                 mode='lines',
@@ -357,7 +411,7 @@ def main():
         
         # MA20 line
         if 'ma_20' in symbol_data.columns and not symbol_data['ma_20'].isna().all():
-            fig_price.add_trace(go.Scatter(
+            fig_price.add_trace(ScatterClass(
                 x=symbol_data['date'],
                 y=symbol_data['ma_20'],
                 mode='lines',
@@ -367,12 +421,12 @@ def main():
                 showlegend=True
             ))
     
-    # Update layout
+    # Update layout with optimized settings
     fig_price.update_layout(
         title="Stock Prices with Moving Averages",
         xaxis_title="Date",
         yaxis_title="Price ($)",
-        hovermode='x unified',
+        hovermode='x unified',  # Faster hover performance
         template='plotly_white',
         height=500,
         legend=dict(
@@ -391,98 +445,102 @@ def main():
     # ============================================
     # SECTION 2 - Volume Analysis
     # ============================================
-    st.header("📊 Volume Analysis")
-    
-    # Prepare volume data
-    volume_df = df_filtered[['symbol', 'date', 'volume']].copy()
-    
-    # Create bar chart
-    fig_volume = px.bar(
-        volume_df,
-        x='date',
-        y='volume',
-        color='symbol',
-        title="Trading Volume Over Time",
-        labels={'volume': 'Volume (Millions)', 'date': 'Date'},
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
-    
-    # Format y-axis in millions
-    fig_volume.update_layout(
-        yaxis=dict(
-            tickformat='.0f',
-            tickmode='linear',
-            title='Volume (Millions)'
-        ),
-        template='plotly_white',
-        height=400,
-        hovermode='x unified'
-    )
-    
-    # Convert to millions for display
-    fig_volume.update_traces(
-        hovertemplate='<b>%{fullData.name}</b><br>' +
-                      'Date: %{x}<br>' +
-                      'Volume: %{y:,.0f}<br>' +
-                      '<extra></extra>'
-    )
-    
-    st.plotly_chart(fig_volume, use_container_width=True)
+    with st.expander("📊 Volume Analysis", expanded=True):
+        # Prepare volume data (sample if large)
+        volume_df = df_filtered[['symbol', 'date', 'volume']].copy()
+        volume_df_sampled = sample_data_for_chart(volume_df, max_points=1000)
+        
+        # Create bar chart
+        fig_volume = px.bar(
+            volume_df_sampled,
+            x='date',
+            y='volume',
+            color='symbol',
+            title="Trading Volume Over Time",
+            labels={'volume': 'Volume (Millions)', 'date': 'Date'},
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        
+        # Format y-axis in millions
+        fig_volume.update_layout(
+            yaxis=dict(
+                tickformat='.0f',
+                tickmode='linear',
+                title='Volume (Millions)'
+            ),
+            template='plotly_white',
+            height=400,
+            hovermode='x unified'  # Faster hover performance
+        )
+        
+        # Convert to millions for display
+        fig_volume.update_traces(
+            hovertemplate='<b>%{fullData.name}</b><br>' +
+                          'Date: %{x}<br>' +
+                          'Volume: %{y:,.0f}<br>' +
+                          '<extra></extra>'
+        )
+        
+        st.plotly_chart(fig_volume, use_container_width=True)
     
     st.divider()
     
     # ============================================
     # SECTION 3 - Daily Returns
     # ============================================
-    st.header("📉 Daily Returns")
-    
-    # Prepare returns data
-    returns_df = df_filtered[['symbol', 'date', 'daily_change_percent']].copy()
-    
-    # Create line chart
-    fig_returns = go.Figure()
-    
-    for symbol in selected_symbols:
-        symbol_data = returns_df[returns_df['symbol'] == symbol]
+    with st.expander("📉 Daily Returns", expanded=True):
+        # Prepare returns data (sample if large)
+        returns_df = df_filtered[['symbol', 'date', 'daily_change_percent']].copy()
+        returns_df_sampled = sample_data_for_chart(returns_df, max_points=1000)
         
-        # Determine color based on positive/negative
-        colors = ['green' if val >= 0 else 'red' for val in symbol_data['daily_change_percent']]
+        # Determine if we should use scattergl
+        use_scattergl_returns = should_use_scattergl(returns_df)
+        ScatterClassReturns = go.Scattergl if use_scattergl_returns else go.Scatter
         
-        fig_returns.add_trace(go.Scatter(
-            x=symbol_data['date'],
-            y=symbol_data['daily_change_percent'],
-            mode='lines+markers',
-            name=symbol,
-            line=dict(width=1.5),
-            marker=dict(size=4),
-            hovertemplate=(
-                f'<b>{symbol}</b><br>' +
-                'Date: %{x}<br>' +
-                'Daily Return: %{y:.2f}%<br>' +
-                '<extra></extra>'
-            )
-        ))
-    
-    # Add horizontal line at y=0
-    fig_returns.add_hline(
-        y=0,
-        line_dash="dash",
-        line_color="gray",
-        annotation_text="Zero Line",
-        annotation_position="right"
-    )
-    
-    # Update layout
-    fig_returns.update_layout(
-        title="Daily Percentage Returns",
-        xaxis_title="Date",
-        yaxis_title="Daily Return (%)",
-        hovermode='x unified',
-        template='plotly_white',
-        height=400
-    )
-    
-    st.plotly_chart(fig_returns, use_container_width=True)
+        # Create line chart
+        fig_returns = go.Figure()
+        
+        for symbol in selected_symbols:
+            symbol_data = returns_df_sampled[returns_df_sampled['symbol'] == symbol]
+            
+            if symbol_data.empty:
+                continue
+            
+            fig_returns.add_trace(ScatterClassReturns(
+                x=symbol_data['date'],
+                y=symbol_data['daily_change_percent'],
+                mode='lines+markers',
+                name=symbol,
+                line=dict(width=1.5),
+                marker=dict(size=3),  # Reduced marker size for better performance
+                hovertemplate=(
+                    f'<b>{symbol}</b><br>' +
+                    'Date: %{x}<br>' +
+                    'Daily Return: %{y:.2f}%<br>' +
+                    '<extra></extra>'
+                )
+            ))
+        
+        # Add horizontal line at y=0
+        fig_returns.add_hline(
+            y=0,
+            line_dash="dash",
+            line_color="gray",
+            annotation_text="Zero Line",
+            annotation_position="right"
+        )
+        
+        # Update layout with optimized settings
+        fig_returns.update_layout(
+            title="Daily Percentage Returns",
+            xaxis_title="Date",
+            yaxis_title="Daily Return (%)",
+            hovermode='x unified',  # Faster hover performance
+            template='plotly_white',
+            height=400
+        )
+        
+        st.plotly_chart(fig_returns, use_container_width=True)
     
     st.divider()
     
@@ -553,33 +611,35 @@ def main():
     st.divider()
     
     # ============================================
-    # SECTION 5 - Volatility Box Plot
+    # SECTION 5 - Volatility Box Plot (Advanced)
     # ============================================
-    st.header("📊 Price Distribution (Box Plot)")
-    
-    # Prepare data for box plot
-    box_df = df_filtered[['symbol', 'close']].copy()
-    
-    # Create box plot
-    fig_box = px.box(
-        box_df,
-        x='symbol',
-        y='close',
-        color='symbol',
-        title="Price Distribution by Symbol",
-        labels={'close': 'Close Price ($)', 'symbol': 'Symbol'},
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
-    
-    fig_box.update_layout(
-        template='plotly_white',
-        height=400,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig_box, use_container_width=True)
-    
-    st.divider()
+    if show_advanced:
+        st.header("📊 Price Distribution (Box Plot)")
+        
+        # Prepare data for box plot
+        box_df = df_filtered[['symbol', 'close']].copy()
+        
+        # Create box plot
+        fig_box = px.box(
+            box_df,
+            x='symbol',
+            y='close',
+            color='symbol',
+            title="Price Distribution by Symbol",
+            labels={'close': 'Close Price ($)', 'symbol': 'Symbol'},
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        
+        fig_box.update_layout(
+            template='plotly_white',
+            height=400,
+            showlegend=False,
+            hovermode='x unified'  # Faster hover performance
+        )
+        
+        st.plotly_chart(fig_box, use_container_width=True)
+        
+        st.divider()
     
     # ============================================
     # FOOTER
