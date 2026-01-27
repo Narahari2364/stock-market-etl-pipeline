@@ -207,6 +207,8 @@ def main():
         st.session_state.last_symbol_selection = None
     if 'last_date_range' not in st.session_state:
         st.session_state.last_date_range = None
+    if 'load_all_data' not in st.session_state:
+        st.session_state.load_all_data = False
     
     # ============================================
     # HEADER
@@ -242,11 +244,14 @@ def main():
         # Fallback: get symbols from full dataframe if cache miss
         all_symbols = sorted(df['symbol'].unique().tolist())
     
+    # Default to 1-2 stocks for faster initial load
+    default_symbols = ['AAPL', 'MSFT'] if all(x in all_symbols for x in ['AAPL', 'MSFT']) else all_symbols[:2] if len(all_symbols) >= 2 else all_symbols
+    
     # Stock symbol multiselect
     selected_symbols = st.sidebar.multiselect(
         "Select Stock Symbols",
         options=all_symbols,
-        default=all_symbols,
+        default=default_symbols if not st.session_state.load_all_data else all_symbols,
         help="Choose one or more stocks to analyze"
     )
     
@@ -259,13 +264,28 @@ def main():
     min_date = df_symbol_filtered['date'].min().date()
     max_date = df_symbol_filtered['date'].max().date()
     
+    # Default to last 30 days for faster initial load
+    default_start_date = (max_date - timedelta(days=30)) if not st.session_state.load_all_data else min_date
+    default_end_date = max_date
+    
     date_range = st.sidebar.date_input(
         "Date Range",
-        value=(min_date, max_date),
+        value=(default_start_date, default_end_date) if not st.session_state.load_all_data else (min_date, max_date),
         min_value=min_date,
         max_value=max_date,
         help="Select date range for analysis"
     )
+    
+    # Load All Data button
+    if st.sidebar.button("📊 Load All Data", use_container_width=True):
+        st.session_state.load_all_data = True
+        st.session_state.filtered_data = None  # Force recompute
+        st.session_state.last_symbol_selection = None
+        st.session_state.last_date_range = None
+        st.rerun()
+    
+    if st.session_state.load_all_data:
+        st.sidebar.success("✓ Showing all data")
     
     # Check if filters have changed
     symbol_selection_changed = (
@@ -318,6 +338,32 @@ def main():
     """)
     
     # ============================================
+    # QUICK STATS SUMMARY
+    # ============================================
+    st.header("⚡ Quick Stats Summary")
+    
+    # Calculate quick stats before rendering charts
+    total_records = len(df_filtered)
+    unique_stocks = df_filtered['symbol'].nunique()
+    date_range_str = f"{df_filtered['date'].min().strftime('%Y-%m-%d')} to {df_filtered['date'].max().strftime('%Y-%m-%d')}"
+    avg_daily_change = df_filtered['daily_change_percent'].mean()
+    
+    stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+    
+    with stats_col1:
+        st.metric("Total Records", f"{total_records:,}")
+    with stats_col2:
+        st.metric("Unique Stocks", unique_stocks)
+    with stats_col3:
+        st.metric("Date Range", date_range_str[:20] + "..." if len(date_range_str) > 20 else date_range_str)
+    with stats_col4:
+        st.metric("Avg Daily Change", format_percent(avg_daily_change))
+    
+    st.info(f"📈 Showing data for: {', '.join(selected_symbols)} | {total_records:,} records | {date_range_str}")
+    
+    st.divider()
+    
+    # ============================================
     # TOP METRICS
     # ============================================
     st.header("📊 Key Metrics")
@@ -339,7 +385,6 @@ def main():
         )
     
     with col3:
-        date_range_str = f"{df_filtered['date'].min().strftime('%Y-%m-%d')} to {df_filtered['date'].max().strftime('%Y-%m-%d')}"
         st.metric(
             "Date Range",
             date_range_str,
