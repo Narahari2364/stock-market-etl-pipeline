@@ -229,7 +229,7 @@ def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_dat
         
         # Get initial record count
         with engine.connect() as conn:
-            result = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
             initial_count = result.scalar() or 0
         
         print(f"Records in database before load: {initial_count}")
@@ -264,7 +264,7 @@ def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_dat
         
         # Get final record count
         with engine.connect() as conn:
-            result = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
             final_count = result.scalar() or 0
         
         records_added = final_count - initial_count
