@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, List
-from sqlalchemy import create_engine, Column, Integer, String, Date, Float, BigInteger, Boolean, DateTime, Index
+from sqlalchemy import create_engine, Column, Integer, String, Date, Float, BigInteger, Boolean, DateTime, Index, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -315,7 +315,7 @@ def get_database_summary(engine=None) -> Dict:
         
         with engine.connect() as conn:
             # Total records
-            result = conn.execute("SELECT COUNT(*) FROM stock_data")
+            result = conn.execute(text("SELECT COUNT(*) FROM stock_data"))
             summary['total_records'] = result.scalar() or 0
             print(f"Total records: {summary['total_records']}")
             
@@ -330,12 +330,12 @@ def get_database_summary(engine=None) -> Dict:
                 }
             
             # Unique symbols
-            result = conn.execute("SELECT COUNT(DISTINCT symbol) FROM stock_data")
+            result = conn.execute(text("SELECT COUNT(DISTINCT symbol) FROM stock_data"))
             summary['unique_symbols'] = result.scalar() or 0
             print(f"Unique symbols: {summary['unique_symbols']}")
             
             # Date range
-            result = conn.execute("SELECT MIN(date), MAX(date) FROM stock_data")
+            result = conn.execute(text("SELECT MIN(date), MAX(date) FROM stock_data"))
             row = result.fetchone()
             summary['date_range'] = {
                 'min_date': row[0].isoformat() if row[0] else None,
@@ -344,14 +344,14 @@ def get_database_summary(engine=None) -> Dict:
             print(f"Date range: {summary['date_range']['min_date']} to {summary['date_range']['max_date']}")
             
             # Average metrics
-            result = conn.execute("""
+            result = conn.execute(text("""
                 SELECT 
                     AVG(close) as avg_close,
                     AVG(volume) as avg_volume,
                     AVG(daily_change_percent) as avg_daily_change_percent
                 FROM stock_data
                 WHERE close IS NOT NULL
-            """)
+            """))
             row = result.fetchone()
             summary['average_metrics'] = {
                 'avg_close': float(row[0]) if row[0] else None,
@@ -363,7 +363,7 @@ def get_database_summary(engine=None) -> Dict:
             print(f"Average daily change: {summary['average_metrics']['avg_daily_change_percent']:.2f}%" if summary['average_metrics']['avg_daily_change_percent'] else "N/A")
             
             # List of symbols
-            result = conn.execute("SELECT DISTINCT symbol FROM stock_data ORDER BY symbol")
+            result = conn.execute(text("SELECT DISTINCT symbol FROM stock_data ORDER BY symbol"))
             summary['symbols_list'] = [row[0] for row in result.fetchall()]
             print(f"Symbols: {', '.join(summary['symbols_list'])}")
         
