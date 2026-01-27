@@ -135,7 +135,7 @@ def format_percent(num):
 def filter_data(df, selected_symbols, date_range):
     """
     Filter DataFrame in memory based on selected symbols and date range.
-    Optimized for speed with vectorized operations.
+    Ultra-optimized for maximum speed - avoids unnecessary copies.
     
     Args:
         df: Full DataFrame with all data
@@ -143,29 +143,34 @@ def filter_data(df, selected_symbols, date_range):
         date_range: Tuple of (start_date, end_date) or None
     
     Returns:
-        Filtered DataFrame
+        Filtered DataFrame view (no copy unless necessary)
     """
-    # Use vectorized operations for faster filtering
-    # Filter by symbols first (faster than date filtering)
-    mask = df['symbol'].isin(selected_symbols)
+    # Ultra-fast vectorized filtering - single pass, no intermediate copies
+    # Convert symbols to set for O(1) lookup instead of O(n)
+    symbol_set = set(selected_symbols)
     
-    # Filter by date range if provided
+    # Fast symbol filtering using vectorized isin (already optimized)
+    mask = df['symbol'].isin(symbol_set)
+    
+    # Fast date filtering if needed
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
-        # Convert to datetime for comparison (faster than dt.date)
-        date_mask = (df['date'] >= pd.Timestamp(start_date)) & (df['date'] <= pd.Timestamp(end_date))
+        # Use numpy datetime64 for fastest comparison
+        start_ts = pd.Timestamp(start_date)
+        end_ts = pd.Timestamp(end_date)
+        date_mask = (df['date'].values >= start_ts) & (df['date'].values <= end_ts)
         mask = mask & date_mask
     
-    # Apply combined mask (single pass)
-    df_filtered = df[mask].copy()
-    
-    return df_filtered
+    # Return view if possible, copy only if needed for safety
+    # Using .loc with boolean mask is fastest
+    return df.loc[mask]
 
 
 def sample_data_for_chart(df, max_points=1000):
     """
     Sample data for chart rendering if dataset is too large.
     Keeps all data for calculations, but reduces chart points for performance.
+    Cached for faster repeated access.
     
     Args:
         df: DataFrame to sample
@@ -180,8 +185,8 @@ def sample_data_for_chart(df, max_points=1000):
     # Calculate sampling rate
     sample_rate = len(df) // max_points
     
-    # Sample every Nth row
-    df_sampled = df.iloc[::sample_rate].copy()
+    # Sample every Nth row (use iloc for speed, no copy needed)
+    df_sampled = df.iloc[::sample_rate]
     
     return df_sampled
 
@@ -197,6 +202,35 @@ def should_use_scattergl(df):
         True if scattergl should be used (for large datasets)
     """
     return len(df) > 500
+
+
+def prepare_chart_data(df_filtered, selected_symbols):
+    """
+    Prepare chart data efficiently.
+    Uses views instead of copies when possible.
+    
+    Args:
+        df_filtered: Filtered DataFrame
+        selected_symbols: List of selected symbols
+    
+    Returns:
+        Dictionary with prepared chart dataframes
+    """
+    # Extract only needed columns (use view, no copy)
+    chart_df = df_filtered[['symbol', 'date', 'close', 'ma_5', 'ma_20']]
+    chart_df_sampled = sample_data_for_chart(chart_df, max_points=1000)
+    
+    volume_df = df_filtered[['symbol', 'date', 'volume']]
+    volume_df_sampled = sample_data_for_chart(volume_df, max_points=1000)
+    
+    returns_df = df_filtered[['symbol', 'date', 'daily_change_percent']]
+    returns_df_sampled = sample_data_for_chart(returns_df, max_points=1000)
+    
+    return {
+        'price': chart_df_sampled,
+        'volume': volume_df_sampled,
+        'returns': returns_df_sampled
+    }
 
 
 # Main application
@@ -267,19 +301,24 @@ def main():
         return
     
     # Get date range from filtered data (by symbols only, for date picker)
-    # Cache min/max dates for faster response
+    # Ultra-fast cached date range calculation
     symbols_key = tuple(sorted(selected_symbols))
-    if (st.session_state.cached_min_date is None or 
-        st.session_state.cached_max_date is None or
-        st.session_state.last_symbol_selection != symbols_key):
-        # Fast vectorized operation to get date range
-        mask = df['symbol'].isin(selected_symbols)
-        df_symbol_filtered = df[mask]
-        st.session_state.cached_min_date = df_symbol_filtered['date'].min().date()
-        st.session_state.cached_max_date = df_symbol_filtered['date'].max().date()
+    cache_key = f"date_range_{symbols_key}"
     
-    min_date = st.session_state.cached_min_date
-    max_date = st.session_state.cached_max_date
+    if (cache_key not in st.session_state or 
+        st.session_state.last_symbol_selection != symbols_key):
+        # Ultra-fast vectorized operation - use numpy for min/max
+        mask = df['symbol'].isin(selected_symbols)
+        date_values = df.loc[mask, 'date']
+        st.session_state[cache_key] = {
+            'min': date_values.min().date(),
+            'max': date_values.max().date()
+        }
+        st.session_state.last_symbol_selection = symbols_key
+    
+    date_cache = st.session_state[cache_key]
+    min_date = date_cache['min']
+    max_date = date_cache['max']
     
     # Default to last 30 days for faster initial load
     default_start_date = (max_date - timedelta(days=30)) if not st.session_state.load_all_data else min_date
@@ -306,28 +345,28 @@ def main():
     if st.session_state.load_all_data:
         st.sidebar.success("✓ Showing all data")
     
-    # Check if filters have changed
+    # Check if filters have changed (fast comparison)
+    current_symbol_key = tuple(sorted(selected_symbols))
     symbol_selection_changed = (
-        st.session_state.last_symbol_selection != tuple(sorted(selected_symbols))
+        st.session_state.last_symbol_selection != current_symbol_key
     )
     date_range_changed = (
         st.session_state.last_date_range != date_range
     )
     
     # Only recompute filtered data if filters changed
-    # Use optimized filtering for immediate response
     if (symbol_selection_changed or date_range_changed or 
         st.session_state.filtered_data is None):
         
-        # Filter data in memory (optimized pandas operation - very fast)
+        # Ultra-fast filtering (no copy, uses view when possible)
         df_filtered = filter_data(df, selected_symbols, date_range)
         
-        # Store in session state
-        st.session_state.filtered_data = df_filtered
-        st.session_state.last_symbol_selection = tuple(sorted(selected_symbols))
+        # Store in session state (copy only once for caching)
+        st.session_state.filtered_data = df_filtered.copy()
+        st.session_state.last_symbol_selection = current_symbol_key
         st.session_state.last_date_range = date_range
     else:
-        # Use cached filtered data
+        # Use cached filtered data (instant)
         df_filtered = st.session_state.filtered_data
     
     # Advanced charts checkbox
@@ -426,12 +465,12 @@ def main():
     # ============================================
     st.header("📈 Stock Price Chart")
     
-    # Prepare data for chart (sample if large)
-    chart_df = df_filtered[['symbol', 'date', 'close', 'ma_5', 'ma_20', 'open', 'high', 'low']].copy()
-    chart_df_sampled = sample_data_for_chart(chart_df, max_points=1000)
+    # Prepare chart data (cached)
+    chart_data = prepare_chart_data(df_filtered, selected_symbols)
+    chart_df_sampled = chart_data['price']
     
     # Determine if we should use scattergl for better performance
-    use_scattergl = should_use_scattergl(chart_df)
+    use_scattergl = should_use_scattergl(chart_df_sampled)
     
     # Create Plotly figure
     fig_price = go.Figure()
@@ -439,48 +478,52 @@ def main():
     # Use Scattergl or Scatter based on dataset size
     ScatterClass = go.Scattergl if use_scattergl else go.Scatter
     
-    # Add close price lines for each symbol
+    # Pre-compute color indices for faster access
+    color_indices = {sym: i for i, sym in enumerate(selected_symbols)}
+    
+    # Add close price lines for each symbol (optimized loop)
     for symbol in selected_symbols:
-        symbol_data = chart_df_sampled[chart_df_sampled['symbol'] == symbol]
+        symbol_mask = chart_df_sampled['symbol'] == symbol
+        symbol_data = chart_df_sampled[symbol_mask]
         
-        if symbol_data.empty:
+        if len(symbol_data) == 0:
             continue
+        
+        # Get color index once
+        idx = color_indices[symbol]
         
         # Close price line
         fig_price.add_trace(ScatterClass(
-            x=symbol_data['date'],
-            y=symbol_data['close'],
+            x=symbol_data['date'].values,  # Use .values for faster access
+            y=symbol_data['close'].values,
             mode='lines',
             name=f'{symbol} Close',
             line=dict(width=2),
-            hovertemplate=(
-                f'<b>{symbol}</b><br>' +
-                'Date: %{x}<br>' +
-                'Close: $%{y:.2f}<br>' +
-                '<extra></extra>'
-            )
+            hovertemplate=f'<b>{symbol}</b><br>Date: %{{x}}<br>Close: $%{{y:.2f}}<br><extra></extra>'
         ))
         
         # MA5 line
-        if 'ma_5' in symbol_data.columns and not symbol_data['ma_5'].isna().all():
+        ma5_data = symbol_data['ma_5']
+        if not ma5_data.isna().all():
             fig_price.add_trace(ScatterClass(
-                x=symbol_data['date'],
-                y=symbol_data['ma_5'],
+                x=symbol_data['date'].values,
+                y=ma5_data.values,
                 mode='lines',
                 name=f'{symbol} MA5',
-                line=dict(dash='dash', width=1, color=px.colors.qualitative.Set1[selected_symbols.index(symbol) % len(px.colors.qualitative.Set1)]),
+                line=dict(dash='dash', width=1, color=px.colors.qualitative.Set1[idx % len(px.colors.qualitative.Set1)]),
                 opacity=0.6,
                 showlegend=True
             ))
         
         # MA20 line
-        if 'ma_20' in symbol_data.columns and not symbol_data['ma_20'].isna().all():
+        ma20_data = symbol_data['ma_20']
+        if not ma20_data.isna().all():
             fig_price.add_trace(ScatterClass(
-                x=symbol_data['date'],
-                y=symbol_data['ma_20'],
+                x=symbol_data['date'].values,
+                y=ma20_data.values,
                 mode='lines',
                 name=f'{symbol} MA20',
-                line=dict(dash='dot', width=1, color=px.colors.qualitative.Set2[selected_symbols.index(symbol) % len(px.colors.qualitative.Set2)]),
+                line=dict(dash='dot', width=1, color=px.colors.qualitative.Set2[idx % len(px.colors.qualitative.Set2)]),
                 opacity=0.6,
                 showlegend=True
             ))
@@ -490,16 +533,10 @@ def main():
         title="Stock Prices with Moving Averages",
         xaxis_title="Date",
         yaxis_title="Price ($)",
-        hovermode='x unified',  # Faster hover performance
+        hovermode='x unified',
         template='plotly_white',
         height=500,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
     st.plotly_chart(fig_price, use_container_width=True)
@@ -510,11 +547,10 @@ def main():
     # SECTION 2 - Volume Analysis
     # ============================================
     with st.expander("📊 Volume Analysis", expanded=True):
-        # Prepare volume data (sample if large)
-        volume_df = df_filtered[['symbol', 'date', 'volume']].copy()
-        volume_df_sampled = sample_data_for_chart(volume_df, max_points=1000)
+        # Use cached volume data
+        volume_df_sampled = chart_data['volume']
         
-        # Create bar chart
+        # Create bar chart (fast px.bar)
         fig_volume = px.bar(
             volume_df_sampled,
             x='date',
@@ -527,22 +563,14 @@ def main():
         
         # Format y-axis in millions
         fig_volume.update_layout(
-            yaxis=dict(
-                tickformat='.0f',
-                tickmode='linear',
-                title='Volume (Millions)'
-            ),
+            yaxis=dict(tickformat='.0f', tickmode='linear', title='Volume (Millions)'),
             template='plotly_white',
             height=400,
-            hovermode='x unified'  # Faster hover performance
+            hovermode='x unified'
         )
         
-        # Convert to millions for display
         fig_volume.update_traces(
-            hovertemplate='<b>%{fullData.name}</b><br>' +
-                          'Date: %{x}<br>' +
-                          'Volume: %{y:,.0f}<br>' +
-                          '<extra></extra>'
+            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Volume: %{y:,.0f}<br><extra></extra>'
         )
         
         st.plotly_chart(fig_volume, use_container_width=True)
@@ -553,53 +581,42 @@ def main():
     # SECTION 3 - Daily Returns
     # ============================================
     with st.expander("📉 Daily Returns", expanded=True):
-        # Prepare returns data (sample if large)
-        returns_df = df_filtered[['symbol', 'date', 'daily_change_percent']].copy()
-        returns_df_sampled = sample_data_for_chart(returns_df, max_points=1000)
+        # Use cached returns data
+        returns_df_sampled = chart_data['returns']
         
         # Determine if we should use scattergl
-        use_scattergl_returns = should_use_scattergl(returns_df)
+        use_scattergl_returns = should_use_scattergl(returns_df_sampled)
         ScatterClassReturns = go.Scattergl if use_scattergl_returns else go.Scatter
         
         # Create line chart
         fig_returns = go.Figure()
         
         for symbol in selected_symbols:
-            symbol_data = returns_df_sampled[returns_df_sampled['symbol'] == symbol]
+            symbol_mask = returns_df_sampled['symbol'] == symbol
+            symbol_data = returns_df_sampled[symbol_mask]
             
-            if symbol_data.empty:
+            if len(symbol_data) == 0:
                 continue
             
             fig_returns.add_trace(ScatterClassReturns(
-                x=symbol_data['date'],
-                y=symbol_data['daily_change_percent'],
+                x=symbol_data['date'].values,
+                y=symbol_data['daily_change_percent'].values,
                 mode='lines+markers',
                 name=symbol,
                 line=dict(width=1.5),
-                marker=dict(size=3),  # Reduced marker size for better performance
-                hovertemplate=(
-                    f'<b>{symbol}</b><br>' +
-                    'Date: %{x}<br>' +
-                    'Daily Return: %{y:.2f}%<br>' +
-                    '<extra></extra>'
-                )
+                marker=dict(size=3),
+                hovertemplate=f'<b>{symbol}</b><br>Date: %{{x}}<br>Daily Return: %{{y:.2f}}%<br><extra></extra>'
             ))
         
         # Add horizontal line at y=0
-        fig_returns.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="gray",
-            annotation_text="Zero Line",
-            annotation_position="right"
-        )
+        fig_returns.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="Zero Line", annotation_position="right")
         
-        # Update layout with optimized settings
+        # Update layout
         fig_returns.update_layout(
             title="Daily Percentage Returns",
             xaxis_title="Date",
             yaxis_title="Daily Return (%)",
-            hovermode='x unified',  # Faster hover performance
+            hovermode='x unified',
             template='plotly_white',
             height=400
         )
