@@ -135,7 +135,7 @@ def format_percent(num):
 def filter_data(df, selected_symbols, date_range):
     """
     Filter DataFrame in memory based on selected symbols and date range.
-    This is fast since it's all in-memory pandas operations.
+    Optimized for speed with vectorized operations.
     
     Args:
         df: Full DataFrame with all data
@@ -145,16 +145,19 @@ def filter_data(df, selected_symbols, date_range):
     Returns:
         Filtered DataFrame
     """
-    # Filter by symbols
-    df_filtered = df[df['symbol'].isin(selected_symbols)].copy()
+    # Use vectorized operations for faster filtering
+    # Filter by symbols first (faster than date filtering)
+    mask = df['symbol'].isin(selected_symbols)
     
     # Filter by date range if provided
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
-        df_filtered = df_filtered[
-            (df_filtered['date'].dt.date >= start_date) &
-            (df_filtered['date'].dt.date <= end_date)
-        ]
+        # Convert to datetime for comparison (faster than dt.date)
+        date_mask = (df['date'] >= pd.Timestamp(start_date)) & (df['date'] <= pd.Timestamp(end_date))
+        mask = mask & date_mask
+    
+    # Apply combined mask (single pass)
+    df_filtered = df[mask].copy()
     
     return df_filtered
 
@@ -209,6 +212,10 @@ def main():
         st.session_state.last_date_range = None
     if 'load_all_data' not in st.session_state:
         st.session_state.load_all_data = False
+    if 'cached_min_date' not in st.session_state:
+        st.session_state.cached_min_date = None
+    if 'cached_max_date' not in st.session_state:
+        st.session_state.cached_max_date = None
     
     # ============================================
     # HEADER
@@ -260,9 +267,19 @@ def main():
         return
     
     # Get date range from filtered data (by symbols only, for date picker)
-    df_symbol_filtered = df[df['symbol'].isin(selected_symbols)].copy()
-    min_date = df_symbol_filtered['date'].min().date()
-    max_date = df_symbol_filtered['date'].max().date()
+    # Cache min/max dates for faster response
+    symbols_key = tuple(sorted(selected_symbols))
+    if (st.session_state.cached_min_date is None or 
+        st.session_state.cached_max_date is None or
+        st.session_state.last_symbol_selection != symbols_key):
+        # Fast vectorized operation to get date range
+        mask = df['symbol'].isin(selected_symbols)
+        df_symbol_filtered = df[mask]
+        st.session_state.cached_min_date = df_symbol_filtered['date'].min().date()
+        st.session_state.cached_max_date = df_symbol_filtered['date'].max().date()
+    
+    min_date = st.session_state.cached_min_date
+    max_date = st.session_state.cached_max_date
     
     # Default to last 30 days for faster initial load
     default_start_date = (max_date - timedelta(days=30)) if not st.session_state.load_all_data else min_date
@@ -279,9 +296,11 @@ def main():
     # Load All Data button
     if st.sidebar.button("📊 Load All Data", use_container_width=True):
         st.session_state.load_all_data = True
-        st.session_state.filtered_data = None  # Force recompute
+        st.session_state.filtered_data = None
         st.session_state.last_symbol_selection = None
         st.session_state.last_date_range = None
+        st.session_state.cached_min_date = None
+        st.session_state.cached_max_date = None
         st.rerun()
     
     if st.session_state.load_all_data:
@@ -296,17 +315,17 @@ def main():
     )
     
     # Only recompute filtered data if filters changed
+    # Use optimized filtering for immediate response
     if (symbol_selection_changed or date_range_changed or 
         st.session_state.filtered_data is None):
         
-        with st.spinner("🔄 Updating charts..."):
-            # Filter data in memory (fast pandas operation)
-            df_filtered = filter_data(df, selected_symbols, date_range)
-            
-            # Store in session state
-            st.session_state.filtered_data = df_filtered
-            st.session_state.last_symbol_selection = tuple(sorted(selected_symbols))
-            st.session_state.last_date_range = date_range
+        # Filter data in memory (optimized pandas operation - very fast)
+        df_filtered = filter_data(df, selected_symbols, date_range)
+        
+        # Store in session state
+        st.session_state.filtered_data = df_filtered
+        st.session_state.last_symbol_selection = tuple(sorted(selected_symbols))
+        st.session_state.last_date_range = date_range
     else:
         # Use cached filtered data
         df_filtered = st.session_state.filtered_data
