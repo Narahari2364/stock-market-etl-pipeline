@@ -29,7 +29,7 @@ st.set_page_config(
 
 @st.cache_data(ttl=600)
 def load_all_data():
-    \"\"\"Load all data from database - cached for 10 minutes\"\"\"
+    """Load all data from database - cached for 10 minutes"""
     try:
         database_url = os.getenv("DATABASE_URL")
         if not database_url:
