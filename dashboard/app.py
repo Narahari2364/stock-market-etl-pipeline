@@ -27,87 +27,29 @@ st.set_page_config(
 )
 
 
-@st.cache_data(ttl=600)  # Cache for 10 minutes
-def load_data():
-    """
-    Load ALL stock data from PostgreSQL database.
-    This loads everything once, then filtering happens in memory.
-    
-    Returns:
-        DataFrame with stock data or None if error occurs
-    """
+@st.cache_data(ttl=600)
+def load_all_data():
+    \"\"\"Load all data from database - cached for 10 minutes\"\"\"
     try:
-        database_url = os.getenv('DATABASE_URL')
-        
+        database_url = os.getenv("DATABASE_URL")
         if not database_url:
-            st.error("❌ DATABASE_URL environment variable is not set")
+            st.error("DATABASE_URL environment variable is not set")
             return None
-        
-        # Create database engine
+
         engine = create_engine(database_url, pool_pre_ping=True)
-        
-        # Load ALL data from database
-        query = text("""
-            SELECT 
-                symbol, date, open, high, low, close, volume,
-                daily_change, daily_change_percent,
-                price_range, price_range_percent,
-                volatility_indicator, volatility_category,
-                volume_category, is_positive_day, is_negative_day,
-                ma_5, ma_20, price_vs_ma5, price_vs_ma20,
-                year, month, quarter, day_of_week, week_of_year,
-                extracted_at, data_source
-            FROM stock_data
-            ORDER BY symbol, date DESC
-        """)
-        
-        df = pd.read_sql(query, engine)
-        
-        # Convert date column to datetime
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-        
-        # Sort by date ascending for proper chart display
-        df = df.sort_values(['symbol', 'date']).reset_index(drop=True)
-        
-        engine.dispose()
-        
+        with engine.connect() as conn:
+            query = text("SELECT * FROM stock_data ORDER BY date DESC")
+            df = pd.read_sql(query, conn)
+            if "date" in df.columns:
+                df["date"] = pd.to_datetime(df["date"])
+
+        # Sort for charts (ascending)
+        if "symbol" in df.columns and "date" in df.columns:
+            df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
+
         return df
-        
     except Exception as e:
-        st.error(f"❌ Error loading data from database: {str(e)}")
-        return None
-
-
-@st.cache_data(ttl=3600)  # Cache for 1 hour (symbols don't change often)
-def load_symbols():
-    """
-    Load only unique symbols from PostgreSQL database.
-    This is faster than loading all data just to get symbols.
-    
-    Returns:
-        List of unique stock symbols or None if error occurs
-    """
-    try:
-        database_url = os.getenv('DATABASE_URL')
-        
-        if not database_url:
-            return None
-        
-        # Create database engine
-        engine = create_engine(database_url, pool_pre_ping=True)
-        
-        # Load only unique symbols
-        query = text("SELECT DISTINCT symbol FROM stock_data ORDER BY symbol")
-        
-        result = engine.connect().execute(query)
-        symbols = [row[0] for row in result.fetchall()]
-        
-        engine.dispose()
-        
-        return symbols
-        
-    except Exception as e:
+        st.error(f"Database error: {e}")
         return None
 
 
@@ -236,38 +178,23 @@ def prepare_chart_data(df_filtered, selected_symbols):
 # Main application
 def main():
     """Main dashboard application."""
-    
-    # Initialize session state for caching filtered data
-    if 'filtered_data' not in st.session_state:
-        st.session_state.filtered_data = None
-    if 'last_symbol_selection' not in st.session_state:
-        st.session_state.last_symbol_selection = None
-    if 'last_date_range' not in st.session_state:
-        st.session_state.last_date_range = None
-    if 'load_all_data' not in st.session_state:
-        st.session_state.load_all_data = False
-    if 'cached_min_date' not in st.session_state:
-        st.session_state.cached_min_date = None
-    if 'cached_max_date' not in st.session_state:
-        st.session_state.cached_max_date = None
-    
+
     # ============================================
     # HEADER
     # ============================================
     st.title("📈 Stock Market Dashboard")
-    
-    # Load data ONCE from database
-    with st.spinner("🔄 Loading data from database..."):
-        df = load_data()
-    
-    if df is None or df.empty:
-        st.warning("⚠️ No data found in database. Please run the ETL pipeline first.")
-        st.info("💡 Run: `python -m src.pipeline` to populate the database.")
-        return
+
+    # Load data ONCE from database (cached)
+    with st.spinner("Loading data from database..."):
+        full_df = load_all_data()
+
+    if full_df is None or full_df.empty:
+        st.error("No data available")
+        st.stop()
     
     # Get last update time
-    if 'extracted_at' in df.columns and not df['extracted_at'].isna().all():
-        last_update = pd.to_datetime(df['extracted_at']).max()
+    if 'extracted_at' in full_df.columns and not full_df['extracted_at'].isna().all():
+        last_update = pd.to_datetime(full_df['extracted_at']).max()
         st.markdown(f"*Last updated: {last_update.strftime('%Y-%m-%d %H:%M:%S')}*")
     else:
         st.markdown(f"*Data loaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
@@ -278,96 +205,50 @@ def main():
     # SIDEBAR
     # ============================================
     st.sidebar.header("⚙️ Filters & Controls")
-    
-    # Load symbols (cached separately for faster loading)
-    all_symbols = load_symbols()
-    if not all_symbols:
-        # Fallback: get symbols from full dataframe if cache miss
-        all_symbols = sorted(df['symbol'].unique().tolist())
-    
-    # Default to 1-2 stocks for faster initial load
-    default_symbols = ['AAPL', 'MSFT'] if all(x in all_symbols for x in ['AAPL', 'MSFT']) else all_symbols[:2] if len(all_symbols) >= 2 else all_symbols
-    
-    # Stock symbol multiselect
+
+    # Get unique symbols from the loaded DataFrame (no DB query)
+    all_symbols = sorted(full_df["symbol"].unique().tolist())
+
+    # Default symbols: first 2 stocks only (fast initial load)
+    default_symbols = all_symbols[:2]
+
     selected_symbols = st.sidebar.multiselect(
         "Select Stock Symbols",
         options=all_symbols,
-        default=default_symbols if not st.session_state.load_all_data else all_symbols,
-        help="Choose one or more stocks to analyze"
+        default=default_symbols,
+        help="Choose one or more stocks to analyze",
     )
     
     if not selected_symbols:
         st.warning("⚠️ Please select at least one stock symbol.")
         return
-    
-    # Get date range from filtered data (by symbols only, for date picker)
-    # Ultra-fast cached date range calculation
-    symbols_key = tuple(sorted(selected_symbols))
-    cache_key = f"date_range_{symbols_key}"
-    
-    if (cache_key not in st.session_state or 
-        st.session_state.last_symbol_selection != symbols_key):
-        # Ultra-fast vectorized operation - use numpy for min/max
-        mask = df['symbol'].isin(selected_symbols)
-        date_values = df.loc[mask, 'date']
-        st.session_state[cache_key] = {
-            'min': date_values.min().date(),
-            'max': date_values.max().date()
-        }
-        st.session_state.last_symbol_selection = symbols_key
-    
-    date_cache = st.session_state[cache_key]
-    min_date = date_cache['min']
-    max_date = date_cache['max']
-    
-    # Default to last 30 days for faster initial load
-    default_start_date = (max_date - timedelta(days=30)) if not st.session_state.load_all_data else min_date
-    default_end_date = max_date
-    
+
+    # Default date range: last 30 days only (fast initial load)
+    max_date = full_df["date"].max()
+    default_end_date = max_date.date()
+    default_start_date = (max_date - timedelta(days=30)).date()
+
     date_range = st.sidebar.date_input(
         "Date Range",
-        value=(default_start_date, default_end_date) if not st.session_state.load_all_data else (min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        help="Select date range for analysis"
+        value=(default_start_date, default_end_date),
+        min_value=full_df["date"].min().date(),
+        max_value=default_end_date,
+        help="Select date range for analysis",
     )
-    
-    # Load All Data button
-    if st.sidebar.button("📊 Load All Data", use_container_width=True):
-        st.session_state.load_all_data = True
-        st.session_state.filtered_data = None
-        st.session_state.last_symbol_selection = None
-        st.session_state.last_date_range = None
-        st.session_state.cached_min_date = None
-        st.session_state.cached_max_date = None
-        st.rerun()
-    
-    if st.session_state.load_all_data:
-        st.sidebar.success("✓ Showing all data")
-    
-    # Check if filters have changed (fast comparison)
-    current_symbol_key = tuple(sorted(selected_symbols))
-    symbol_selection_changed = (
-        st.session_state.last_symbol_selection != current_symbol_key
-    )
-    date_range_changed = (
-        st.session_state.last_date_range != date_range
-    )
-    
-    # Only recompute filtered data if filters changed
-    if (symbol_selection_changed or date_range_changed or 
-        st.session_state.filtered_data is None):
-        
-        # Ultra-fast filtering (no copy, uses view when possible)
-        df_filtered = filter_data(df, selected_symbols, date_range)
-        
-        # Store in session state (copy only once for caching)
-        st.session_state.filtered_data = df_filtered.copy()
-        st.session_state.last_symbol_selection = current_symbol_key
-        st.session_state.last_date_range = date_range
-    else:
-        # Use cached filtered data (instant)
-        df_filtered = st.session_state.filtered_data
+
+    # Filter in memory from full_df (no DB queries)
+    # Filter by symbols
+    filtered_df = full_df[full_df["symbol"].isin(selected_symbols)].copy()
+
+    # Filter by date range
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        filtered_df = filtered_df[
+            (filtered_df["date"] >= pd.to_datetime(date_range[0]))
+            & (filtered_df["date"] <= pd.to_datetime(date_range[1]))
+        ]
+
+    # Keep existing variable name used by downstream charts
+    df_filtered = filtered_df
     
     # Advanced charts checkbox
     show_advanced = st.sidebar.checkbox(
@@ -379,9 +260,6 @@ def main():
     # Refresh button
     if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
-        st.session_state.filtered_data = None
-        st.session_state.last_symbol_selection = None
-        st.session_state.last_date_range = None
         st.rerun()
     
     st.sidebar.divider()
