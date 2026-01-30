@@ -212,17 +212,36 @@ def main():
     # Default symbols: first 2 stocks only (fast initial load)
     default_symbols = all_symbols[:2]
 
-    # Use a form so changing widgets doesn't re-render charts until Apply is clicked
+    # Initialize session state
     if "filtered_df" not in st.session_state:
         st.session_state.filtered_df = None
     if "filters_key" not in st.session_state:
         st.session_state.filters_key = None
+    if "reset_filters" not in st.session_state:
+        st.session_state.reset_filters = False
 
+    # Default date range: last 30 days only (fast initial load)
+    max_dt = full_df["date"].max()
+    min_dt = full_df["date"].min()
+    default_end_date = max_dt.date()
+    default_start_date = (max_dt - timedelta(days=30)).date()
+
+    # Initialize widget defaults in session state if not set or if reset was clicked
+    if "symbols_multiselect" not in st.session_state or st.session_state.reset_filters:
+        st.session_state.symbols_multiselect = default_symbols
+    if "date_range_input" not in st.session_state or st.session_state.reset_filters:
+        st.session_state.date_range_input = (default_start_date, default_end_date)
+    
+    # Reset the reset flag after using it
+    if st.session_state.reset_filters:
+        st.session_state.reset_filters = False
+
+    # Use a form so changing widgets doesn't re-render charts until Apply is clicked
     with st.sidebar.form("filters_form", clear_on_submit=False):
         selected_symbols = st.multiselect(
             "Select Stock Symbols",
             options=all_symbols,
-            default=default_symbols,
+            default=st.session_state.symbols_multiselect,
             help="Choose one or more stocks to analyze",
             key="symbols_multiselect",
         )
@@ -230,15 +249,9 @@ def main():
         if not selected_symbols:
             st.warning("⚠️ Please select at least one stock symbol.")
 
-        # Default date range: last 30 days only (fast initial load)
-        max_dt = full_df["date"].max()
-        min_dt = full_df["date"].min()
-        default_end_date = max_dt.date()
-        default_start_date = (max_dt - timedelta(days=30)).date()
-
         date_range = st.date_input(
             "Date Range",
-            value=(default_start_date, default_end_date),
+            value=st.session_state.date_range_input,
             min_value=min_dt.date(),
             max_value=default_end_date,
             help="Select date range for analysis",
@@ -249,19 +262,19 @@ def main():
         submitted = c_apply.form_submit_button("✅ Apply Filters", type="primary")
         reset_clicked = c_reset.form_submit_button("🔁 Reset Filters")
 
+    # Handle reset button
+    if reset_clicked:
+        # Reset to defaults (first 2 stocks, last 30 days)
+        st.session_state.reset_filters = True
+        st.session_state.filtered_df = None
+        st.session_state.filters_key = None
+        st.rerun()
+
     # Compute filtered df only when Apply is clicked, otherwise reuse last
     filters_key = (
         tuple(sorted(selected_symbols)) if selected_symbols else tuple(),
         tuple(date_range) if isinstance(date_range, tuple) else (date_range,),
     )
-
-    if reset_clicked:
-        # Reset to defaults (first 2 stocks, last 30 days)
-        st.session_state["symbols_multiselect"] = default_symbols
-        st.session_state["date_range_input"] = (default_start_date, default_end_date)
-        st.session_state.filtered_df = None
-        st.session_state.filters_key = None
-        st.rerun()
 
     if submitted or st.session_state.filtered_df is None or st.session_state.filters_key != filters_key:
         if not selected_symbols:
