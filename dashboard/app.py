@@ -207,7 +207,7 @@ def main():
     st.sidebar.header("⚙️ Filters & Controls")
 
     # Get unique symbols from the loaded DataFrame (no DB query)
-    all_symbols = sorted(full_df["symbol"].unique().tolist())
+    all_symbols = sorted(full_df["symbol"].dropna().unique().tolist())
 
     # Default symbols: first 2 stocks only (fast initial load)
     default_symbols = all_symbols[:2]
@@ -224,6 +224,7 @@ def main():
             options=all_symbols,
             default=default_symbols,
             help="Choose one or more stocks to analyze",
+            key="symbols_multiselect",
         )
 
         if not selected_symbols:
@@ -241,46 +242,42 @@ def main():
             min_value=min_dt.date(),
             max_value=default_end_date,
             help="Select date range for analysis",
+            key="date_range_input",
         )
 
-        show_moving_averages = st.checkbox(
-            "Show Moving Averages (MA5/MA20)",
-            value=False,
-            help="Turn off for faster chart rendering",
-        )
-
-        show_advanced = st.checkbox(
-            "Show Advanced Charts",
-            value=False,
-            help="Enable heavy charts like volatility box plots",
-        )
-
-        submitted = st.form_submit_button("✅ Apply Filters")
+        c_apply, c_reset = st.columns(2)
+        submitted = c_apply.form_submit_button("✅ Apply Filters", type="primary")
+        reset_clicked = c_reset.form_submit_button("🔁 Reset Filters")
 
     # Compute filtered df only when Apply is clicked, otherwise reuse last
     filters_key = (
         tuple(sorted(selected_symbols)) if selected_symbols else tuple(),
         tuple(date_range) if isinstance(date_range, tuple) else (date_range,),
-        bool(show_moving_averages),
-        bool(show_advanced),
     )
+
+    if reset_clicked:
+        # Reset to defaults (first 2 stocks, last 30 days)
+        st.session_state["symbols_multiselect"] = default_symbols
+        st.session_state["date_range_input"] = (default_start_date, default_end_date)
+        st.session_state.filtered_df = None
+        st.session_state.filters_key = None
+        st.rerun()
 
     if submitted or st.session_state.filtered_df is None or st.session_state.filters_key != filters_key:
         if not selected_symbols:
             st.stop()
 
-        with st.spinner("Updating dashboard..."):
-            # Filter in memory from full_df (no DB queries)
-            filtered_df = full_df[full_df["symbol"].isin(selected_symbols)]
+        # Filter in memory from full_df (no DB queries)
+        filtered_df = full_df[full_df["symbol"].isin(selected_symbols)].copy()
 
-            if isinstance(date_range, tuple) and len(date_range) == 2:
-                start_dt = pd.to_datetime(date_range[0])
-                end_dt = pd.to_datetime(date_range[1])
-                filtered_df = filtered_df[(filtered_df["date"] >= start_dt) & (filtered_df["date"] <= end_dt)]
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            start_dt = pd.to_datetime(date_range[0])
+            end_dt = pd.to_datetime(date_range[1])
+            filtered_df = filtered_df[(filtered_df["date"] >= start_dt) & (filtered_df["date"] <= end_dt)]
 
-            # Persist
-            st.session_state.filtered_df = filtered_df
-            st.session_state.filters_key = filters_key
+        # Persist
+        st.session_state.filtered_df = filtered_df
+        st.session_state.filters_key = filters_key
 
     df_filtered = st.session_state.filtered_df
 
@@ -307,74 +304,33 @@ def main():
     """)
     
     # ============================================
-    # QUICK STATS SUMMARY
+    # TOP METRICS ROW
     # ============================================
-    st.header("⚡ Quick Stats Summary")
-    
-    # Calculate quick stats before rendering charts
     total_records = len(df_filtered)
-    unique_stocks = df_filtered['symbol'].nunique()
-    date_range_str = f"{df_filtered['date'].min().strftime('%Y-%m-%d')} to {df_filtered['date'].max().strftime('%Y-%m-%d')}"
-    avg_daily_change = df_filtered['daily_change_percent'].mean()
-    
-    stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
-    
-    with stats_col1:
-        st.metric("Total Records", f"{total_records:,}")
-    with stats_col2:
-        st.metric("Unique Stocks", unique_stocks)
-    with stats_col3:
-        st.metric("Date Range", date_range_str[:20] + "..." if len(date_range_str) > 20 else date_range_str)
-    with stats_col4:
-        st.metric("Avg Daily Change", format_percent(avg_daily_change))
-    
-    st.info(f"📈 Showing data for: {', '.join(selected_symbols)} | {total_records:,} records | {date_range_str}")
-    
-    st.divider()
-    
-    # ============================================
-    # TOP METRICS
-    # ============================================
-    st.header("📊 Key Metrics")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
+    unique_symbols = df_filtered["symbol"].nunique()
+    date_range_str = f"{df_filtered['date'].min().date()} → {df_filtered['date'].max().date()}"
+    avg_daily_change = df_filtered["daily_change_percent"].mean() if "daily_change_percent" in df_filtered.columns else None
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("📊 Total Records", f"{total_records:,}")
+    with m2:
+        st.metric("🏢 Unique Symbols", f"{unique_symbols}")
+    with m3:
+        st.metric("📅 Date Range", date_range_str)
+    with m4:
         st.metric(
-            "Total Records",
-            f"{len(df_filtered):,}",
-            help="Total number of records in selected range"
-        )
-    
-    with col2:
-        st.metric(
-            "Unique Stocks",
-            len(selected_symbols),
-            help="Number of selected stock symbols"
-        )
-    
-    with col3:
-        st.metric(
-            "Date Range",
-            date_range_str,
-            help="Earliest to latest date in dataset"
-        )
-    
-    with col4:
-        avg_daily_change = df_filtered['daily_change_percent'].mean()
-        st.metric(
-            "Avg Daily Change %",
+            "📈 Avg Daily Change %",
             format_percent(avg_daily_change),
-            delta=format_percent(avg_daily_change),
-            help="Average daily percentage change"
+            delta=format_percent(avg_daily_change) if avg_daily_change is not None else None,
         )
     
     st.divider()
     
     # ============================================
-    # SECTION 1 - Stock Price Chart
+    # A) Stock Price with Moving Averages
     # ============================================
-    st.header("📈 Stock Price Chart")
+    st.header("📈 Stock Price Trends with Moving Averages")
     
     # Prepare chart data (cached)
     chart_data = prepare_chart_data(df_filtered, selected_symbols)
@@ -399,52 +355,65 @@ def main():
         # Get color index once
         idx = color_indices[symbol]
         
+        base_color = px.colors.qualitative.Set1[idx % len(px.colors.qualitative.Set1)]
+
         # Close price line
         fig_price.add_trace(ScatterClass(
             x=symbol_data['date'].values,  # Use .values for faster access
             y=symbol_data['close'].values,
             mode='lines',
             name=f'{symbol} Close',
-            line=dict(width=2),
-            hovertemplate=f'<b>{symbol}</b><br>Date: %{{x}}<br>Close: $%{{y:.2f}}<br><extra></extra>'
+            line=dict(width=2, color=base_color),
+            hovertemplate=(
+                f"<b>{symbol}</b><br>"
+                "Date: %{x}<br>"
+                "Close: $%{y:.2f}<br>"
+                "<extra></extra>"
+            ),
         ))
-        
-        if show_moving_averages:
-            # MA5 line
-            ma5_data = symbol_data['ma_5']
-            if not ma5_data.isna().all():
-                fig_price.add_trace(ScatterClass(
-                    x=symbol_data['date'].values,
-                    y=ma5_data.values,
-                    mode='lines',
-                    name=f'{symbol} MA5',
-                    line=dict(dash='dash', width=1, color=px.colors.qualitative.Set1[idx % len(px.colors.qualitative.Set1)]),
-                    opacity=0.6,
-                    showlegend=True
-                ))
 
-            # MA20 line
-            ma20_data = symbol_data['ma_20']
-            if not ma20_data.isna().all():
-                fig_price.add_trace(ScatterClass(
-                    x=symbol_data['date'].values,
-                    y=ma20_data.values,
-                    mode='lines',
-                    name=f'{symbol} MA20',
-                    line=dict(dash='dot', width=1, color=px.colors.qualitative.Set2[idx % len(px.colors.qualitative.Set2)]),
-                    opacity=0.6,
-                    showlegend=True
-                ))
+        # MA5 / MA20 lines (always shown if available)
+        if "ma_5" in symbol_data.columns and not symbol_data["ma_5"].isna().all():
+            fig_price.add_trace(ScatterClass(
+                x=symbol_data['date'].values,
+                y=symbol_data['ma_5'].values,
+                mode='lines',
+                name=f'{symbol} MA5',
+                line=dict(dash='dash', width=1, color=base_color),
+                opacity=0.7,
+                hovertemplate=(
+                    f"<b>{symbol}</b><br>"
+                    "Date: %{x}<br>"
+                    "MA5: $%{y:.2f}<br>"
+                    "<extra></extra>"
+                ),
+            ))
+
+        if "ma_20" in symbol_data.columns and not symbol_data["ma_20"].isna().all():
+            fig_price.add_trace(ScatterClass(
+                x=symbol_data['date'].values,
+                y=symbol_data['ma_20'].values,
+                mode='lines',
+                name=f'{symbol} MA20',
+                line=dict(dash='dash', width=1, color=base_color),
+                opacity=0.5,
+                hovertemplate=(
+                    f"<b>{symbol}</b><br>"
+                    "Date: %{x}<br>"
+                    "MA20: $%{y:.2f}<br>"
+                    "<extra></extra>"
+                ),
+            ))
     
     # Update layout with optimized settings
     fig_price.update_layout(
-        title="Stock Prices with Moving Averages",
+        title="📈 Stock Price Trends with Moving Averages",
         xaxis_title="Date",
         yaxis_title="Price ($)",
         hovermode='x unified',
         template='plotly_white',
-        height=500,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        height=520,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
     )
     
     st.plotly_chart(fig_price, use_container_width=True, config={"displayModeBar": False})
@@ -452,204 +421,182 @@ def main():
     st.divider()
     
     # ============================================
-    # SECTION 2 - Volume Analysis
+    # B) Trading Volume Analysis
     # ============================================
-    with st.expander("📊 Volume Analysis", expanded=False):
-        # Use cached volume data
-        volume_df_sampled = chart_data['volume']
-        
-        # Create bar chart (fast px.bar)
-        fig_volume = px.bar(
-            volume_df_sampled,
-            x='date',
-            y='volume',
-            color='symbol',
-            title="Trading Volume Over Time",
-            labels={'volume': 'Volume (Millions)', 'date': 'Date'},
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        
-        # Format y-axis in millions
-        fig_volume.update_layout(
-            yaxis=dict(tickformat='.0f', tickmode='linear', title='Volume (Millions)'),
-            template='plotly_white',
-            height=400,
-            hovermode='x unified'
-        )
-        
-        fig_volume.update_traces(
-            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Volume: %{y:,.0f}<br><extra></extra>'
-        )
-        
-        st.plotly_chart(fig_volume, use_container_width=True, config={"displayModeBar": False})
-    
-    st.divider()
-    
-    # ============================================
-    # SECTION 3 - Daily Returns
-    # ============================================
-    with st.expander("📉 Daily Returns", expanded=False):
-        # Use cached returns data
-        returns_df_sampled = chart_data['returns']
-        
-        # Determine if we should use scattergl
-        use_scattergl_returns = should_use_scattergl(returns_df_sampled)
-        ScatterClassReturns = go.Scattergl if use_scattergl_returns else go.Scatter
-        
-        # Create line chart
-        fig_returns = go.Figure()
-        
-        for symbol in selected_symbols:
-            symbol_mask = returns_df_sampled['symbol'] == symbol
-            symbol_data = returns_df_sampled[symbol_mask]
-            
-            if len(symbol_data) == 0:
-                continue
-            
-            fig_returns.add_trace(ScatterClassReturns(
-                x=symbol_data['date'].values,
-                y=symbol_data['daily_change_percent'].values,
-                mode='lines+markers',
-                name=symbol,
-                line=dict(width=1.5),
-                marker=dict(size=3),
-                hovertemplate=f'<b>{symbol}</b><br>Date: %{{x}}<br>Daily Return: %{{y:.2f}}%<br><extra></extra>'
-            ))
-        
-        # Add horizontal line at y=0
-        fig_returns.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="Zero Line", annotation_position="right")
-        
-        # Update layout
-        fig_returns.update_layout(
-            title="Daily Percentage Returns",
-            xaxis_title="Date",
-            yaxis_title="Daily Return (%)",
-            hovermode='x unified',
-            template='plotly_white',
-            height=400
-        )
-        
-        st.plotly_chart(fig_returns, use_container_width=True, config={"displayModeBar": False})
-    
-    st.divider()
-    
-    # ============================================
-    # SECTION 4 - Performance Table
-    # ============================================
-    with st.expander("💼 Performance Summary", expanded=False):
-    
-        # Calculate metrics for each symbol
-        performance_data = []
-    
-    for symbol in selected_symbols:
-        symbol_data = df_filtered[df_filtered['symbol'] == symbol].sort_values('date')
-        
-        if symbol_data.empty:
-            continue
-        
-        # Calculate metrics
-        current_price = symbol_data['close'].iloc[-1]
-        avg_price = symbol_data['close'].mean()
-        min_price = symbol_data['close'].min()
-        max_price = symbol_data['close'].max()
-        
-        # Total return (first to last)
-        first_price = symbol_data['close'].iloc[0]
-        total_return = ((current_price - first_price) / first_price) * 100 if first_price > 0 else 0
-        
-        # Average daily change
-        avg_daily_change = symbol_data['daily_change_percent'].mean()
-        
-        # Total volume
-        total_volume = symbol_data['volume'].sum()
-        
-        performance_data.append({
-            'Symbol': symbol,
-            'Current Price': current_price,
-            'Average Price': avg_price,
-            'Min Price': min_price,
-            'Max Price': max_price,
-            'Total Return %': total_return,
-            'Avg Daily Change %': avg_daily_change,
-            'Total Volume': total_volume
-        })
-    
-        # Create DataFrame
-        perf_df = pd.DataFrame(performance_data)
-    
-    # Format columns
-        if not perf_df.empty:
-            # Format numeric columns
-            perf_df['Current Price'] = perf_df['Current Price'].apply(lambda x: format_currency(x))
-            perf_df['Average Price'] = perf_df['Average Price'].apply(lambda x: format_currency(x))
-            perf_df['Min Price'] = perf_df['Min Price'].apply(lambda x: format_currency(x))
-            perf_df['Max Price'] = perf_df['Max Price'].apply(lambda x: format_currency(x))
-            perf_df['Total Return %'] = perf_df['Total Return %'].apply(lambda x: format_percent(x))
-            perf_df['Avg Daily Change %'] = perf_df['Avg Daily Change %'].apply(lambda x: format_percent(x))
-            perf_df['Total Volume'] = perf_df['Total Volume'].apply(lambda x: format_number(x, 0))
+    st.header("📊 Trading Volume")
 
-            st.dataframe(perf_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No performance data available.")
+    volume_df_sampled = chart_data["volume"].copy()
+    if "volume" in volume_df_sampled.columns:
+        volume_df_sampled["volume_m"] = volume_df_sampled["volume"] / 1_000_000.0
+    else:
+        volume_df_sampled["volume_m"] = None
+
+    fig_volume = px.bar(
+        volume_df_sampled,
+        x="date",
+        y="volume_m",
+        color="symbol",
+        barmode="group",
+        title="📊 Trading Volume",
+        labels={"volume_m": "Volume (Millions)", "date": "Date", "symbol": "Symbol"},
+        template="plotly_white",
+    )
+    fig_volume.update_layout(height=420, hovermode="x unified")
+    st.plotly_chart(fig_volume, use_container_width=True, config={"displayModeBar": False})
     
     st.divider()
     
     # ============================================
-    # SECTION 5 - Volatility Box Plot (Advanced)
+    # C) Daily Returns
     # ============================================
-    if show_advanced:
-        st.header("📊 Price Distribution (Box Plot)")
-        
-        # Prepare data for box plot
-        box_df = df_filtered[['symbol', 'close']].copy()
-        
-        # Create box plot
+    st.header("💹 Daily Price Changes (%)")
+
+    returns_df_sampled = chart_data["returns"]
+    fig_returns = go.Figure()
+
+    for symbol in selected_symbols:
+        s = returns_df_sampled[returns_df_sampled["symbol"] == symbol]
+        if s.empty:
+            continue
+
+        x = s["date"].values
+        y = s["daily_change_percent"].values
+
+        # Base line
+        fig_returns.add_trace(go.Scattergl(
+            x=x,
+            y=y,
+            mode="lines",
+            name=symbol,
+            line=dict(width=1.5),
+            hovertemplate=f"<b>{symbol}</b><br>Date: %{{x}}<br>Change: %{{y:.2f}}%<extra></extra>",
+        ))
+
+        # Filled positive/negative areas
+        y_pos = y.copy()
+        y_pos[y_pos < 0] = None
+        y_neg = y.copy()
+        y_neg[y_neg >= 0] = None
+
+        fig_returns.add_trace(go.Scattergl(
+            x=x,
+            y=y_pos,
+            mode="lines",
+            line=dict(width=0),
+            fill="tozeroy",
+            fillcolor="rgba(0,180,0,0.15)",
+            showlegend=False,
+            hoverinfo="skip",
+        ))
+        fig_returns.add_trace(go.Scattergl(
+            x=x,
+            y=y_neg,
+            mode="lines",
+            line=dict(width=0),
+            fill="tozeroy",
+            fillcolor="rgba(220,0,0,0.15)",
+            showlegend=False,
+            hoverinfo="skip",
+        ))
+
+    fig_returns.add_hline(y=0, line_dash="dash", line_color="gray")
+    fig_returns.update_layout(
+        title="💹 Daily Price Changes (%)",
+        xaxis_title="Date",
+        yaxis_title="Daily Change (%)",
+        hovermode="x unified",
+        template="plotly_white",
+        height=420,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    st.plotly_chart(fig_returns, use_container_width=True, config={"displayModeBar": False})
+    
+    st.divider()
+    
+    # ============================================
+    # D) Performance Summary Table
+    # ============================================
+    st.header("📋 Performance Metrics")
+
+    perf_rows = []
+    for symbol in selected_symbols:
+        s = df_filtered[df_filtered["symbol"] == symbol].sort_values("date")
+        if s.empty:
+            continue
+
+        latest_price = s["close"].iloc[-1]
+        period_avg = s["close"].mean()
+        min_price = s["close"].min()
+        max_price = s["close"].max()
+        first_price = s["close"].iloc[0]
+        total_return = ((latest_price - first_price) / first_price) * 100 if first_price else None
+        avg_dc = s["daily_change_percent"].mean() if "daily_change_percent" in s.columns else None
+        total_vol_m = (s["volume"].sum() / 1_000_000.0) if "volume" in s.columns else None
+
+        perf_rows.append({
+            "Symbol": symbol,
+            "Latest Price": latest_price,
+            "Period Average": period_avg,
+            "Min Price": min_price,
+            "Max Price": max_price,
+            "Total Return %": total_return,
+            "Avg Daily Change %": avg_dc,
+            "Total Volume (M)": total_vol_m,
+        })
+
+    perf_df = pd.DataFrame(perf_rows)
+    if perf_df.empty:
+        st.info("No performance data available.")
+    else:
+        display_df = perf_df.copy()
+        display_df["Latest Price"] = display_df["Latest Price"].apply(format_currency)
+        display_df["Period Average"] = display_df["Period Average"].apply(format_currency)
+        display_df["Min Price"] = display_df["Min Price"].apply(format_currency)
+        display_df["Max Price"] = display_df["Max Price"].apply(format_currency)
+        display_df["Total Return %"] = display_df["Total Return %"].apply(format_percent)
+        display_df["Avg Daily Change %"] = display_df["Avg Daily Change %"].apply(format_percent)
+        display_df["Total Volume (M)"] = display_df["Total Volume (M)"].apply(lambda x: f"{x:.2f}M" if pd.notna(x) else "N/A")
+
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ============================================
+    # E) Price Distribution (Volatility)
+    # ============================================
+    with st.expander("📦 Price Distribution & Volatility", expanded=False):
+        box_df = df_filtered[["symbol", "close"]].copy()
         fig_box = px.box(
             box_df,
-            x='symbol',
-            y='close',
-            color='symbol',
-            title="Price Distribution by Symbol",
-            labels={'close': 'Close Price ($)', 'symbol': 'Symbol'},
-            color_discrete_sequence=px.colors.qualitative.Pastel
+            x="symbol",
+            y="close",
+            color="symbol",
+            title="📦 Price Distribution & Volatility",
+            labels={"close": "Close Price ($)", "symbol": "Symbol"},
+            template="plotly_white",
         )
-        
-        fig_box.update_layout(
-            template='plotly_white',
-            height=400,
-            showlegend=False,
-            hovermode='x unified'  # Faster hover performance
-        )
-        
-        st.plotly_chart(fig_box, use_container_width=True)
-        
-        st.divider()
-    
+        fig_box.update_layout(height=420, hovermode="x unified", showlegend=False)
+        st.plotly_chart(fig_box, use_container_width=True, config={"displayModeBar": False})
+
+    st.divider()
+
     # ============================================
     # FOOTER
     # ============================================
-    st.markdown("---")
-    
-    footer_col1, footer_col2, footer_col3 = st.columns(3)
-    
-    with footer_col1:
-        st.markdown("**Data Source**")
-        st.markdown("Alpha Vantage API")
-    
-    with footer_col2:
-        st.markdown("**Database**")
-        st.markdown("PostgreSQL")
-    
-    with footer_col3:
-        st.markdown("**GitHub**")
-        st.markdown("[View Repository](#)")
-    
-    st.markdown(
-        "<div style='text-align: center; color: gray; padding: 20px;'>"
-        "Powered by Alpha Vantage API | Stock Market ETL Pipeline"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    f1, f2, f3 = st.columns([2, 2, 1])
+    with f1:
+        st.caption("Data source: Alpha Vantage API")
+    with f2:
+        if 'extracted_at' in full_df.columns and not full_df['extracted_at'].isna().all():
+            st.caption(f"Last updated: {pd.to_datetime(full_df['extracted_at']).max().strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    with f3:
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            st.cache_data.clear()
+            st.session_state.filtered_df = None
+            st.session_state.filters_key = None
+            st.rerun()
 
 
 if __name__ == "__main__":
