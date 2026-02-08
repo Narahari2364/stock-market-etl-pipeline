@@ -1,92 +1,84 @@
-#!/usr/bin/env python3
-"""
-Stock Market ETL Pipeline - Scheduler
-
-Runs the ETL pipeline daily at 9:00 AM. Start in background with:
-    python3 scheduler.py &
-
-Avoids macOS launchd permission issues by using a simple Python scheduler.
-"""
-
-import os
-import sys
-import subprocess
-import logging
-from pathlib import Path
-from datetime import datetime
-
-# Load environment before other imports
-from dotenv import load_dotenv
-load_dotenv()
-
 import schedule
 import time
+import subprocess
+import logging
+import os
+from datetime import datetime
+from dotenv import load_dotenv
 
-# Project root (directory containing this script)
-PROJECT_ROOT = Path(__file__).resolve().parent
-LOGS_DIR = PROJECT_ROOT / "logs"
-LOG_FILE = LOGS_DIR / "scheduler.log"
+# Load environment variables
+load_dotenv()
 
-# Ensure logs directory exists
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Configure logging
+# Setup logging
+os.makedirs('logs', exist_ok=True)
 logging.basicConfig(
+    filename='logs/scheduler.log',
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(sys.stdout),
-    ],
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("scheduler")
 
+# Also log to console
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+logging.getLogger('').addHandler(console)
 
 def run_pipeline():
-    """Run the ETL pipeline (non-interactive: default symbols, auto-confirm)."""
-    logger.info("Starting scheduled ETL pipeline run")
-    start = datetime.now()
-
-    # Use default symbols and auto-confirm: Enter, then y
-    pipeline_input = "\ny\n"
-
+    """Run the ETL pipeline"""
+    logging.info("=" * 70)
+    logging.info(f"🚀 Scheduler triggered pipeline run at {datetime.now()}")
+    logging.info("=" * 70)
+    
     try:
+        # Run the pipeline
         result = subprocess.run(
-            [sys.executable, "-m", "src.pipeline"],
-            cwd=PROJECT_ROOT,
-            input=pipeline_input.encode(),
+            ['python3', 'src/pipeline.py'],
             capture_output=True,
-            text=False,
-            timeout=600,  # 10 minutes max
-            env=os.environ.copy(),
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
         )
-
-        elapsed = (datetime.now() - start).total_seconds()
+        
+        # Log the output
+        if result.stdout:
+            logging.info("Pipeline output:")
+            logging.info(result.stdout)
+        
+        # Check result
         if result.returncode == 0:
-            logger.info("Pipeline completed successfully in %.1f seconds", elapsed)
+            logging.info("✅ Pipeline completed successfully")
         else:
-            logger.error(
-                "Pipeline failed with exit code %s after %.1f seconds",
-                result.returncode,
-                elapsed,
-            )
+            logging.error(f"❌ Pipeline failed with exit code: {result.returncode}")
             if result.stderr:
-                logger.error("stderr: %s", result.stderr.decode(errors="replace"))
-
-    except subprocess.TimeoutExpired:
-        logger.error("Pipeline run timed out after 10 minutes")
+                logging.error(f"Error details: {result.stderr}")
+                
     except Exception as e:
-        logger.exception("Pipeline run failed: %s", e)
+        logging.error(f"❌ Exception while running pipeline: {str(e)}")
+    
+    logging.info("=" * 70)
 
+# Schedule the job - runs every day at 9:00 AM
+schedule.every().day.at("09:00").do(run_pipeline)
 
-def main():
-    logger.info("Scheduler started. Next run: daily at 09:00")
-    schedule.every().day.at("09:00").do(run_pipeline)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Check every minute
-
+# For testing - uncomment to run every 2 minutes
+# schedule.every(2).minutes.do(run_pipeline)
 
 if __name__ == "__main__":
-    main()
+    logging.info("=" * 70)
+    logging.info("🚀 Stock Market ETL Scheduler Started")
+    logging.info("=" * 70)
+    logging.info(f"📅 Current time: {datetime.now()}")
+    logging.info(f"⏰ Pipeline scheduled to run daily at 9:00 AM")
+    logging.info(f"📝 Logs: logs/scheduler.log")
+    logging.info(f"📊 Pipeline logs: logs/pipeline_*.log")
+    logging.info("=" * 70)
+    logging.info("Press Ctrl+C to stop the scheduler")
+    logging.info("")
+    
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # Check every minute
+    except KeyboardInterrupt:
+        logging.info("")
+        logging.info("=" * 70)
+        logging.info("⏸️  Scheduler stopped by user")
+        logging.info("=" * 70)

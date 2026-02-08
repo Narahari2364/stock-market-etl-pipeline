@@ -28,3 +28,4 @@ pytest-cov>=4.1.0
 black>=23.0.0
 flake8>=6.0.0
 
+schedule==1.2.0
