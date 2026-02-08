@@ -56,10 +56,10 @@ def run_pipeline():
     logging.info("=" * 70)
 
 # Schedule the job - runs every day at 9:00 AM
-schedule.every().day.at("09:00").do(run_pipeline)
+# schedule.every().day.at("09:00").do(run_pipeline)
 
-# For testing - uncomment to run every 2 minutes
-# schedule.every(2).minutes.do(run_pipeline)
+# For testing - run every 2 minutes
+schedule.every(2).minutes.do(run_pipeline)
 
 if __name__ == "__main__":
     logging.info("=" * 70)
