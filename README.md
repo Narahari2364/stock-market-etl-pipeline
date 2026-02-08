@@ -247,6 +247,43 @@ The pipeline tracks these default stocks (configurable):
 
 You can customize the stock list when running the pipeline interactively.
 
+## ⏰ Automated Scheduling
+
+The pipeline runs automatically every day at 9:00 AM using a Python-based scheduler.
+
+### Start the Scheduler
+```bash
+# Option 1: Run in foreground (keep terminal open)
+python3 scheduler.py
+
+# Option 2: Run in background
+./start_scheduler.sh
+
+# Option 3: Run with screen (recommended for servers)
+screen -S etl-scheduler
+python3 scheduler.py
+# Press Ctrl+A then D to detach
+```
+
+### Manage Scheduler
+```bash
+# Check status
+./check_scheduler.sh
+
+# View logs
+tail -f logs/scheduler.log
+
+# Stop scheduler
+./stop_scheduler.sh
+```
+
+### Customize Schedule
+
+Edit `scheduler.py` to change the schedule:
+- Daily at specific time: `schedule.every().day.at("09:00").do(run_pipeline)`
+- Every X hours: `schedule.every(6).hours.do(run_pipeline)`
+- Specific days: `schedule.every().monday.at("09:00").do(run_pipeline)`
+
 ## 🎯 Future Enhancements
 
 - [ ] **Apache Airflow Integration**: Schedule and orchestrate pipeline runs with DAGs
