@@ -1,5 +1,12 @@
 # 📈 Stock Market ETL Pipeline
 
+![Tests](https://github.com/YOUR_USERNAME/stock-market-etl-pipeline/workflows/Tests/badge.svg)
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
+![Coverage](https://img.shields.io/badge/coverage-41%25-yellow.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+*(Replace YOUR_USERNAME with your actual GitHub username)*
+
 A production-ready ETL (Extract, Transform, Load) pipeline for processing stock market data from Alpha Vantage API into PostgreSQL database. This project demonstrates end-to-end data engineering practices including API integration, data transformation, database operations, and comprehensive error handling.
 
 ## 📋 Project Overview
@@ -30,6 +37,30 @@ This project demonstrates:
 | **python-dotenv** | 1.0+ | Environment variable management |
 | **Docker** | Latest | Containerization |
 | **PyArrow** | 12.0+ | Parquet file support |
+
+## 🧪 Testing
+
+This project includes comprehensive unit tests with 41% code coverage:
+
+- **25 test cases** covering extraction, transformation, and loading
+- **Mocked external dependencies** (API calls, database)
+- **Automated CI/CD** with GitHub Actions
+- **Coverage reports** generated with pytest-cov
+
+### Run Tests Locally
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=src --cov-report=html
+
+# View coverage report in browser
+open htmlcov/index.html
+
+# Run specific test file
+pytest tests/test_extract.py -v
+```
 
 ## 📊 Data Features
 
