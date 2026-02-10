@@ -612,7 +612,7 @@ def main():
         else:
             st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     with f3:
-        if st.button("🔄 Refresh Data", use_container_width=True):
+        if st.button("🔄 Refresh Data", key="refresh_data_button", use_container_width=True):
             st.cache_data.clear()
             st.session_state.filtered_df = None
             st.session_state.filters_key = None
