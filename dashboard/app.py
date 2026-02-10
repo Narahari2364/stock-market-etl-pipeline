@@ -5,13 +5,20 @@ Interactive dashboard for visualizing and analyzing stock market data
 extracted from Alpha Vantage API and stored in PostgreSQL.
 """
 
+import streamlit as st
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-import streamlit as st
+# For Streamlit Cloud, use secrets
+if hasattr(st, 'secrets'):
+    try:
+        os.environ['DATABASE_URL'] = st.secrets['DATABASE_URL']
+    except Exception:
+        pass  # Use .env file instead
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
