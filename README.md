@@ -173,7 +173,7 @@ Proceed with ETL pipeline? (y/n): y
 🚀 Starting ETL pipeline...
 ```
 
-**Default Stocks**: The pipeline processes 25 major stocks by default. See **Stock Coverage** below for the full list.
+**Default Stocks**: The pipeline processes 17+ major stocks by default. See **Stock Coverage** below for the full list.
 
 ## ⚠️ API Rate Limits
 
@@ -187,7 +187,7 @@ The pipeline automatically handles rate limits by:
 - Gracefully handling rate limit errors with informative messages
 
 **Recommendations:**
-- Use the default 25 stocks for testing
+- Use the default 17+ stocks for testing
 - For production, consider upgrading to a premium API key
 - Monitor your daily API call usage
 - Implement caching for frequently accessed data
@@ -261,30 +261,27 @@ The ETL pipeline follows these 4 main steps:
 
 ## 📈 Stock Coverage
 
-The pipeline tracks **25 major stocks** across different sectors:
+The pipeline tracks **17+ major stocks** across different sectors (symbols that successfully load):
 
-**Technology** (7 stocks)
-- AAPL (Apple), MSFT (Microsoft), GOOGL (Google), AMZN (Amazon), META (Facebook), NVDA (NVIDIA), TSLA (Tesla)
+**Technology** (5 stocks)
+- AAPL (Apple), MSFT (Microsoft), GOOGL (Google), AMZN (Amazon), NVDA (NVIDIA)
 
-**Financial Services** (5 stocks)
-- JPM (JP Morgan), BAC (Bank of America), GS (Goldman Sachs), V (Visa), MA (Mastercard)
+**Financial Services** (3 stocks)
+- JPM (JP Morgan), V (Visa), MA (Mastercard)
 
-**Healthcare** (4 stocks)
-- JNJ (Johnson & Johnson), UNH (UnitedHealth), PFE (Pfizer), ABBV (AbbVie)
+**Healthcare** (3 stocks)
+- JNJ (Johnson & Johnson), UNH (UnitedHealth), PFE (Pfizer)
 
-**Consumer Goods** (4 stocks)
-- WMT (Walmart), PG (Procter & Gamble), KO (Coca-Cola), MCD (McDonald's)
+**Consumer Goods** (3 stocks)
+- WMT (Walmart), PG (Procter & Gamble), KO (Coca-Cola)
 
 **Energy** (2 stocks)
 - XOM (Exxon Mobil), CVX (Chevron)
 
-**Industrials** (2 stocks)
-- BA (Boeing), CAT (Caterpillar)
+**Industrials** (1 stock)
+- CAT (Caterpillar)
 
-**Entertainment** (1 stock)
-- DIS (Disney)
-
-You can customize the stock list when running the pipeline interactively. With default symbols and ~100 days of data per symbol, expect **2500+ records** in the database.
+You can customize the stock list when running the pipeline interactively. With default symbols and ~100 days of data per symbol, expect **2900+ records** in the database.
 
 ## ⏰ Automated Scheduling
 
