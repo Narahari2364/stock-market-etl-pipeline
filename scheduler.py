@@ -67,6 +67,7 @@ if __name__ == "__main__":
     logging.info("=" * 70)
     logging.info(f"📅 Current time: {datetime.now()}")
     logging.info(f"⏰ Pipeline scheduled to run daily at 9:00 AM")
+    logging.info(f"📈 Pipeline default: 25 stocks (configurable in pipeline)")
     logging.info(f"📝 Logs: logs/scheduler.log")
     logging.info(f"📊 Pipeline logs: logs/pipeline_*.log")
     logging.info("=" * 70)
