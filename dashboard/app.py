@@ -7,10 +7,6 @@ extracted from Alpha Vantage API and stored in PostgreSQL.
 
 import streamlit as st
 import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # For Streamlit Cloud, use secrets
 if hasattr(st, 'secrets'):
