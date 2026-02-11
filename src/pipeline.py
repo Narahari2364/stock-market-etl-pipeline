@@ -23,6 +23,42 @@ from extract import fetch_multiple_stocks
 from transform import transform_stock_data
 from load import load_to_database, get_database_summary, create_tables, get_database_engine
 
+# Default symbols if none provided
+DEFAULT_SYMBOLS = [
+    # Tech Giants (7)
+    'AAPL',   # Apple
+    'MSFT',   # Microsoft
+    'GOOGL',  # Alphabet (Google)
+    'AMZN',   # Amazon
+    'META',   # Meta (Facebook)
+    'NVDA',   # NVIDIA
+    'TSLA',   # Tesla
+    # Financial Services (5)
+    'JPM',    # JP Morgan Chase
+    'BAC',    # Bank of America
+    'GS',     # Goldman Sachs
+    'V',      # Visa
+    'MA',     # Mastercard
+    # Healthcare (4)
+    'JNJ',    # Johnson & Johnson
+    'UNH',    # UnitedHealth Group
+    'PFE',    # Pfizer
+    'ABBV',   # AbbVie
+    # Consumer Goods (4)
+    'WMT',    # Walmart
+    'PG',     # Procter & Gamble
+    'KO',     # Coca-Cola
+    'MCD',    # McDonald's
+    # Energy (2)
+    'XOM',    # Exxon Mobil
+    'CVX',    # Chevron
+    # Industrials (2)
+    'BA',     # Boeing
+    'CAT',    # Caterpillar
+    # Entertainment (1)
+    'DIS',    # Disney
+]
+
 
 def setup_logging() -> logging.Logger:
     """
@@ -78,7 +114,7 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
     Run the complete ETL pipeline: Extract, Transform, Load.
     
     Args:
-        symbols: List of stock symbols to process. Default: ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
+        symbols: List of stock symbols to process. Default: 25 stocks across sectors (see DEFAULT_SYMBOLS)
         interval: Time interval for data extraction (default: "daily")
     
     Returns:
@@ -86,9 +122,9 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
     """
     logger = logging.getLogger('pipeline')
     
-    # Default symbols if not provided
+    # Default symbols if none provided
     if symbols is None:
-        symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
+        symbols = DEFAULT_SYMBOLS
     
     # Calculate estimated time (12 seconds per stock + processing time)
     estimated_seconds = len(symbols) * 12 + 30  # 12s per API call + 30s for processing
@@ -297,8 +333,8 @@ if __name__ == "__main__":
     print("Alpha Vantage API has a rate limit of 5 calls per minute.")
     print("This pipeline uses a 12-second delay between API calls to respect this limit.")
     print("")
-    print("For 5 default stocks (AAPL, MSFT, GOOGL, TSLA, NVDA):")
-    print("  • Estimated time: ~60 seconds (5 stocks × 12 seconds)")
+    print("For 25 default stocks:")
+    print("  • Estimated time: ~5-6 minutes")
     print("  • Plus additional time for transformation and loading")
     print("")
     print("=" * 80)
@@ -306,20 +342,20 @@ if __name__ == "__main__":
     
     # Allow customization of symbols
     user_input = input(
-        "Enter stock symbols (comma-separated) or press Enter for default [AAPL, MSFT, GOOGL, TSLA, NVDA]: "
+        "Enter stock symbols (comma-separated) or press Enter for default (25 stocks): "
     ).strip()
-    
+
     if user_input:
         # Parse user input
         symbols = [s.strip().upper() for s in user_input.split(',') if s.strip()]
         if not symbols:
             print("⚠️  No valid symbols entered. Using defaults.")
-            symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
+            symbols = DEFAULT_SYMBOLS
         else:
             print(f"✓ Using custom symbols: {', '.join(symbols)}")
     else:
-        symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
-        print(f"✓ Using default symbols: {', '.join(symbols)}")
+        symbols = DEFAULT_SYMBOLS
+        print(f"✓ Using default symbols ({len(symbols)} stocks): {', '.join(symbols)}")
     
     # Calculate and display estimated time
     estimated_seconds = len(symbols) * 12 + 30
