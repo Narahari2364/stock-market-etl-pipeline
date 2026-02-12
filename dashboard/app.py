@@ -45,12 +45,7 @@ st.set_page_config(
 def load_all_data():
     """Load all data from database - cached for 10 minutes"""
     try:
-        database_url = os.getenv("DATABASE_URL")
-        if not database_url:
-            st.error("DATABASE_URL environment variable is not set")
-            return None
-
-        engine = create_engine(database_url, pool_pre_ping=True)
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True)
         with engine.connect() as conn:
             query = text("SELECT * FROM stock_data ORDER BY date DESC")
             df = pd.read_sql(query, conn)
