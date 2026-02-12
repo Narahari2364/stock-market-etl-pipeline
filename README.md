@@ -9,6 +9,16 @@
 
 A production-ready ETL (Extract, Transform, Load) pipeline for processing stock market data from Alpha Vantage API into PostgreSQL database. This project demonstrates end-to-end data engineering practices including API integration, data transformation, database operations, and comprehensive error handling.
 
+## 📊 Project Stats
+
+- **2900+** stock records across **17 symbols**
+- **100%** data quality validation pass rate
+- **25** comprehensive unit tests
+- **41%** code coverage
+- **5** automated alerts/notifications
+- **Live dashboard** deployed on Streamlit Cloud
+- **Daily automated** data updates
+
 ## 📋 Project Overview
 
 This project demonstrates:
@@ -61,6 +71,22 @@ open htmlcov/index.html
 # Run specific test file
 pytest tests/test_extract.py -v
 ```
+
+## 🔍 Data Quality
+
+This project includes automated data quality checks using Great Expectations:
+
+### Quality Checks
+
+- **Column Validation**: Ensures all required columns exist
+- **Null Checks**: Validates critical fields have no missing data
+- **Range Validation**: Prices between $0-$10,000, volumes > 0
+- **Logical Consistency**: High >= Low, unique symbol+date combinations
+- **Outlier Detection**: Daily changes within reasonable bounds (-50% to +50%)
+
+### Validation Reports
+
+Data quality reports are automatically generated in `logs/data_quality_*.txt`
 
 ## 📊 Data Features
 
