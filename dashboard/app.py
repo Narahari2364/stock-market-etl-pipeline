@@ -20,6 +20,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
+import sys
+sys.path.append('src')
+from predictions import generate_predictions_for_all, get_trading_signals, get_top_predictions
 
 # Page configuration
 st.set_page_config(
@@ -574,6 +577,98 @@ def main():
         display_df["Total Volume (M)"] = display_df["Total Volume (M)"].apply(lambda x: f"{x:.2f}M" if pd.notna(x) else "N/A")
 
         st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ============================================
+    # ML Predictions Section
+    # ============================================
+    st.header("🤖 ML Price Predictions")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📈 Top Predicted Gainers")
+        try:
+            gainers = get_top_predictions(df_filtered, top_n=5, prediction_type='gainers')
+            if not gainers.empty:
+                # Format for display
+                display_cols = ['symbol', 'current_price', 'predicted_price', 'predicted_change_percent', 'confidence', 'trend']
+                st.dataframe(
+                    gainers[display_cols].style.background_gradient(subset=['predicted_change_percent'], cmap='Greens'),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Not enough data for predictions")
+        except Exception as e:
+            st.error(f"Error generating predictions: {e}")
+
+    with col2:
+        st.subheader("📉 Top Predicted Losers")
+        try:
+            losers = get_top_predictions(df_filtered, top_n=5, prediction_type='losers')
+            if not losers.empty:
+                display_cols = ['symbol', 'current_price', 'predicted_price', 'predicted_change_percent', 'confidence', 'trend']
+                st.dataframe(
+                    losers[display_cols].style.background_gradient(subset=['predicted_change_percent'], cmap='Reds'),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Not enough data for predictions")
+        except Exception as e:
+            st.error(f"Error generating predictions: {e}")
+
+    # Trading Signals
+    st.subheader("🎯 Trading Signals (MA Crossover)")
+    try:
+        signals = get_trading_signals(df_filtered)
+        if not signals.empty:
+            # Color code buy/sell signals
+            def color_signal(val):
+                color = 'background-color: #d4edda' if val == 'BUY' else 'background-color: #f8d7da'
+                return color
+
+            st.dataframe(
+                signals[['symbol', 'signal', 'signal_type', 'date', 'price', 'days_ago']].style.applymap(
+                    color_signal, subset=['signal']
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No recent MA crossover signals detected. Check back after market movements!")
+    except Exception as e:
+        st.error(f"Error generating trading signals: {e}")
+
+    # Prediction Details Expander
+    with st.expander("ℹ️ How Predictions Work"):
+        st.markdown("""
+        ### Prediction Methodology
+
+        Our ML predictions use **Moving Average Crossover Strategy**:
+
+        **Bullish Trend (Price Increase Expected):**
+        - MA5 (5-day moving average) > MA20 (20-day moving average)
+        - Recent positive momentum
+
+        **Bearish Trend (Price Decrease Expected):**
+        - MA5 < MA20
+        - Recent negative momentum
+
+        **Trading Signals:**
+        - **Golden Cross (BUY):** MA5 crosses above MA20
+        - **Death Cross (SELL):** MA5 crosses below MA20
+
+        **Confidence Levels:**
+        - **HIGH:** Strong trend with low volatility
+        - **MEDIUM:** Moderate trend with moderate volatility
+        - **LOW:** Weak trend or high volatility
+
+        ⚠️ **Disclaimer:** These are educational predictions based on historical data.
+        Not financial advice. Always do your own research before investing.
+        """)
 
     st.divider()
 
