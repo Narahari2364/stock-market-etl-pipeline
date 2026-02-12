@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Import alert modules
+from src.alerts import send_pipeline_success_email, send_pipeline_failure_email
+from src.slack_alerts import send_pipeline_success_slack, send_pipeline_failure_slack
+
 # Setup logging
 os.makedirs('logs', exist_ok=True)
 logging.basicConfig(
@@ -45,13 +49,60 @@ def run_pipeline():
         # Check result
         if result.returncode == 0:
             logging.info("✅ Pipeline completed successfully")
+            
+            # Send success alerts
+            try:
+                # Try to extract info from stdout (records, symbols)
+                # Default values if parsing fails
+                records_loaded = 0
+                symbols_count = 17  # Default from pipeline
+                symbols_list = []
+                
+                # Try to parse records from stdout
+                if result.stdout:
+                    import re
+                    records_match = re.search(r'Records loaded: ([\d,]+)', result.stdout)
+                    if records_match:
+                        records_loaded = int(records_match.group(1).replace(',', ''))
+                    
+                    symbols_match = re.search(r'Symbols processed: (\d+)', result.stdout)
+                    if symbols_match:
+                        symbols_count = int(symbols_match.group(1))
+                
+                send_pipeline_success_email(
+                    records_loaded=records_loaded,
+                    symbols_count=symbols_count,
+                    symbols_list=symbols_list if symbols_list else ['N/A']
+                )
+                send_pipeline_success_slack(
+                    records=records_loaded,
+                    symbols_count=symbols_count,
+                    symbols_list=symbols_list if symbols_list else ['N/A']
+                )
+            except Exception as alert_error:
+                logging.warning(f"Failed to send success alerts: {alert_error}")
         else:
             logging.error(f"❌ Pipeline failed with exit code: {result.returncode}")
+            error_message = result.stderr if result.stderr else f"Pipeline failed with exit code {result.returncode}"
             if result.stderr:
                 logging.error(f"Error details: {result.stderr}")
+            
+            # Send failure alerts
+            try:
+                send_pipeline_failure_email(error_message, step='Scheduled Pipeline Run')
+                send_pipeline_failure_slack(error_message, step='Scheduled Pipeline Run')
+            except Exception as alert_error:
+                logging.warning(f"Failed to send failure alerts: {alert_error}")
                 
     except Exception as e:
         logging.error(f"❌ Exception while running pipeline: {str(e)}")
+        
+        # Send failure alerts for exceptions
+        try:
+            send_pipeline_failure_email(str(e), step='Scheduled Pipeline Run (Exception)')
+            send_pipeline_failure_slack(str(e), step='Scheduled Pipeline Run (Exception)')
+        except Exception as alert_error:
+            logging.warning(f"Failed to send failure alerts: {alert_error}")
     
     logging.info("=" * 70)
 
