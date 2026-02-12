@@ -595,10 +595,17 @@ def main():
         try:
             gainers = get_top_predictions(df_filtered, top_n=5, prediction_type='gainers')
             if not gainers.empty:
-                # Format for display
-                display_cols = ['symbol', 'current_price', 'predicted_price', 'predicted_change_percent', 'confidence', 'trend']
+                # Format columns
+                gainers_display = gainers[['symbol', 'current_price', 'predicted_price',
+                                           'predicted_change_percent', 'confidence', 'trend']].copy()
+                gainers_display['current_price'] = gainers_display['current_price'].apply(lambda x: f"${x:.2f}")
+                gainers_display['predicted_price'] = gainers_display['predicted_price'].apply(lambda x: f"${x:.2f}")
+                gainers_display['predicted_change_percent'] = gainers_display['predicted_change_percent'].apply(
+                    lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
+                )
+
                 st.dataframe(
-                    gainers[display_cols].style.background_gradient(subset=['predicted_change_percent'], cmap='Greens'),
+                    gainers_display,
                     use_container_width=True,
                     hide_index=True
                 )
@@ -612,9 +619,17 @@ def main():
         try:
             losers = get_top_predictions(df_filtered, top_n=5, prediction_type='losers')
             if not losers.empty:
-                display_cols = ['symbol', 'current_price', 'predicted_price', 'predicted_change_percent', 'confidence', 'trend']
+                # Format columns
+                losers_display = losers[['symbol', 'current_price', 'predicted_price',
+                                         'predicted_change_percent', 'confidence', 'trend']].copy()
+                losers_display['current_price'] = losers_display['current_price'].apply(lambda x: f"${x:.2f}")
+                losers_display['predicted_price'] = losers_display['predicted_price'].apply(lambda x: f"${x:.2f}")
+                losers_display['predicted_change_percent'] = losers_display['predicted_change_percent'].apply(
+                    lambda x: f"{x:.2f}%"
+                )
+
                 st.dataframe(
-                    losers[display_cols].style.background_gradient(subset=['predicted_change_percent'], cmap='Reds'),
+                    losers_display,
                     use_container_width=True,
                     hide_index=True
                 )
@@ -628,15 +643,11 @@ def main():
     try:
         signals = get_trading_signals(df_filtered)
         if not signals.empty:
-            # Color code buy/sell signals
-            def color_signal(val):
-                color = 'background-color: #d4edda' if val == 'BUY' else 'background-color: #f8d7da'
-                return color
+            signals_display = signals[['symbol', 'signal', 'signal_type', 'date', 'price', 'days_ago']].copy()
+            signals_display['price'] = signals_display['price'].apply(lambda x: f"${x:.2f}")
 
             st.dataframe(
-                signals[['symbol', 'signal', 'signal_type', 'date', 'price', 'days_ago']].style.applymap(
-                    color_signal, subset=['signal']
-                ),
+                signals_display,
                 use_container_width=True,
                 hide_index=True
             )
