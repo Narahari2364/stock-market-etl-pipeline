@@ -27,6 +27,9 @@ from load import load_to_database, get_database_summary, create_tables, get_data
 from alerts import send_pipeline_success_email, send_pipeline_failure_email
 from slack_alerts import send_pipeline_success_slack, send_pipeline_failure_slack
 
+# Import data quality modules
+from data_quality import validate_stock_data, save_validation_report
+
 # Default symbols if none provided
 DEFAULT_SYMBOLS = [
     # Tech Giants (7)
@@ -217,6 +220,35 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
             # Memory usage
             memory_mb = df_transformed.memory_usage(deep=True).sum() / 1024**2
             logger.info(f"   ✓ Memory usage: {memory_mb:.2f} MB")
+
+            logger.info("\n🔍 STEP 2.5: VALIDATE - Running data quality checks...")
+            validation_results = validate_stock_data(df_transformed, log_results=True)
+
+            if not validation_results['success']:
+                logger.warning(
+                    f"⚠️  Data quality below threshold: {validation_results.get('success_rate', 0):.1f}%"
+                )
+
+                # Send alert about data quality issues
+                try:
+                    from alerts import send_data_quality_warning_email
+                    from slack_alerts import send_data_quality_warning_slack
+
+                    issues_summary = f"{len(validation_results.get('failed_expectations', []))} checks failed"
+                    send_data_quality_warning_email(issues_summary)
+                    send_data_quality_warning_slack(issues_summary)
+                except Exception:
+                    pass
+
+                # Ask user if they want to continue
+                logger.warning("⚠️  Data quality issues detected. Pipeline will continue with loading...")
+            else:
+                logger.info(
+                    f"✅ Data quality validation passed: {validation_results.get('success_rate', 0):.1f}%"
+                )
+
+            # Save validation report
+            save_validation_report(validation_results)
             
         except Exception as e:
             logger.error(f"❌ TRANSFORM step failed: {str(e)}")
