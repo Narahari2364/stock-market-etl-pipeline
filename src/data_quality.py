@@ -240,7 +240,7 @@ def validate_stock_data(df, log_results=True):
 
 
 def save_validation_report(validation_results, output_dir='logs'):
-    \"\"\"Save validation results to a report file\"\"\"
+    """Save validation results to a report file"""
     
     os.makedirs(output_dir, exist_ok=True)
     
