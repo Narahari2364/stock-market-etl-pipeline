@@ -595,14 +595,19 @@ def main():
         try:
             gainers = get_top_predictions(df_filtered, top_n=5, prediction_type='gainers')
             if not gainers.empty:
-                # Format columns
+                # Format for display
                 gainers_display = gainers[['symbol', 'current_price', 'predicted_price',
                                            'predicted_change_percent', 'confidence', 'trend']].copy()
+
+                # Format numeric columns
                 gainers_display['current_price'] = gainers_display['current_price'].apply(lambda x: f"${x:.2f}")
                 gainers_display['predicted_price'] = gainers_display['predicted_price'].apply(lambda x: f"${x:.2f}")
                 gainers_display['predicted_change_percent'] = gainers_display['predicted_change_percent'].apply(
-                    lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
+                    lambda x: f"🟢 +{x:.2f}%" if x > 0 else f"{x:.2f}%"
                 )
+
+                # Rename columns for display
+                gainers_display.columns = ['Symbol', 'Current Price', 'Predicted Price', 'Change %', 'Confidence', 'Trend']
 
                 st.dataframe(
                     gainers_display,
@@ -612,21 +617,26 @@ def main():
             else:
                 st.info("Not enough data for predictions")
         except Exception as e:
-            st.error(f"Error generating predictions: {e}")
+            st.error(f"Error: {e}")
 
     with col2:
         st.subheader("📉 Top Predicted Losers")
         try:
             losers = get_top_predictions(df_filtered, top_n=5, prediction_type='losers')
             if not losers.empty:
-                # Format columns
+                # Format for display
                 losers_display = losers[['symbol', 'current_price', 'predicted_price',
                                          'predicted_change_percent', 'confidence', 'trend']].copy()
+
+                # Format numeric columns
                 losers_display['current_price'] = losers_display['current_price'].apply(lambda x: f"${x:.2f}")
                 losers_display['predicted_price'] = losers_display['predicted_price'].apply(lambda x: f"${x:.2f}")
                 losers_display['predicted_change_percent'] = losers_display['predicted_change_percent'].apply(
-                    lambda x: f"{x:.2f}%"
+                    lambda x: f"🔴 {x:.2f}%"
                 )
+
+                # Rename columns for display
+                losers_display.columns = ['Symbol', 'Current Price', 'Predicted Price', 'Change %', 'Confidence', 'Trend']
 
                 st.dataframe(
                     losers_display,
@@ -636,7 +646,7 @@ def main():
             else:
                 st.info("Not enough data for predictions")
         except Exception as e:
-            st.error(f"Error generating predictions: {e}")
+            st.error(f"Error: {e}")
 
     # Trading Signals
     st.subheader("🎯 Trading Signals (MA Crossover)")
@@ -644,7 +654,15 @@ def main():
         signals = get_trading_signals(df_filtered)
         if not signals.empty:
             signals_display = signals[['symbol', 'signal', 'signal_type', 'date', 'price', 'days_ago']].copy()
+
+            # Format columns
             signals_display['price'] = signals_display['price'].apply(lambda x: f"${x:.2f}")
+            signals_display['signal'] = signals_display['signal'].apply(
+                lambda x: f"🟢 {x}" if x == 'BUY' else f"🔴 {x}"
+            )
+
+            # Rename columns
+            signals_display.columns = ['Symbol', 'Signal', 'Type', 'Date', 'Price', 'Days Ago']
 
             st.dataframe(
                 signals_display,
@@ -654,7 +672,7 @@ def main():
         else:
             st.info("No recent MA crossover signals detected. Check back after market movements!")
     except Exception as e:
-        st.error(f"Error generating trading signals: {e}")
+        st.error(f"Error: {e}")
 
     # Prediction Details Expander
     with st.expander("ℹ️ How Predictions Work"):
