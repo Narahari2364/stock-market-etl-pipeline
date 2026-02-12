@@ -7,13 +7,21 @@ extracted from Alpha Vantage API and stored in PostgreSQL.
 
 import streamlit as st
 import os
+from dotenv import load_dotenv
 
-# For Streamlit Cloud, use secrets
-if hasattr(st, 'secrets'):
-    try:
-        os.environ['DATABASE_URL'] = st.secrets['DATABASE_URL']
-    except Exception:
-        pass  # Use .env file instead
+# Load environment variables
+load_dotenv()
+
+# Get DATABASE_URL from Streamlit secrets or environment
+try:
+    DATABASE_URL = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
+except Exception:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    st.error("❌ DATABASE_URL environment variable is not set")
+    st.info("Please configure DATABASE_URL in Streamlit Cloud Settings → Secrets")
+    st.stop()
 
 import pandas as pd
 import plotly.express as px
