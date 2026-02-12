@@ -23,6 +23,10 @@ from extract import fetch_multiple_stocks
 from transform import transform_stock_data
 from load import load_to_database, get_database_summary, create_tables, get_database_engine
 
+# Import alert modules
+from alerts import send_pipeline_success_email, send_pipeline_failure_email
+from slack_alerts import send_pipeline_success_slack, send_pipeline_failure_slack
+
 # Default symbols if none provided
 DEFAULT_SYMBOLS = [
     # Tech Giants (7)
@@ -304,6 +308,21 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.info("=" * 80)
         logger.info("")
         
+        # Send success alerts
+        try:
+            send_pipeline_success_email(
+                records_loaded=len(df_transformed),
+                symbols_count=len(symbols),
+                symbols_list=symbols
+            )
+            send_pipeline_success_slack(
+                records=len(df_transformed),
+                symbols_count=len(symbols),
+                symbols_list=symbols
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send success alerts: {e}")
+        
         return True
         
     except Exception as e:
@@ -316,6 +335,14 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.error(traceback.format_exc())
         logger.error("=" * 80)
         logger.error("")
+        
+        # Send failure alerts
+        try:
+            send_pipeline_failure_email(str(e), step='Pipeline Execution')
+            send_pipeline_failure_slack(str(e), step='Pipeline Execution')
+        except Exception as alert_error:
+            logger.warning(f"Failed to send failure alerts: {alert_error}")
+        
         return False
 
 
