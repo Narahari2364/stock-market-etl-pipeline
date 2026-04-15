@@ -122,6 +122,21 @@ def load_data():
     return pd.DataFrame(), False
 
 
+def check_database_health():
+    """Check if database is reachable"""
+    try:
+        db_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
+        if not db_url:
+            return False, "No DATABASE_URL configured"
+
+        engine = create_engine(db_url, connect_args={"connect_timeout": 5})
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True, "Connected"
+    except Exception as e:
+        return False, str(e)
+
+
 def format_number(num, decimals=2):
     """Format number with commas and decimals."""
     if pd.isna(num):
@@ -253,16 +268,29 @@ def main():
     # ============================================
     st.title("📈 Stock Market Dashboard")
 
-    # Load data ONCE from database (cached, with retries)
-    with st.spinner("Loading data from database..."):
-        full_df, db_connected = load_data()
+    db_healthy, db_message = check_database_health()
 
-    if db_connected:
-        st.success("📊 Connected to database")
+    if not db_healthy:
+        st.warning(f"⚠️ Database unavailable: {db_message[:100]}")
+        st.info("💡 Showing sample data. Database may be sleeping (free tier limits).")
+        st.info("🔄 To use live data: Wait 60 seconds and click 'Rerun' or refresh page.")
+
+        if st.button("🔄 Try Reconnecting to Database", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+
+        full_df = generate_sample_data()
+        is_live = False
     else:
-        st.error("❌ Database connection failed after 3 attempts")
-        st.info("💡 The free database may be sleeping. Wait 30 seconds and refresh.")
-        st.warning("Showing sample data so the dashboard remains usable.")
+        with st.spinner("Loading data from database..."):
+            full_df, is_live = load_data()
+
+        if is_live:
+            st.success("📊 Connected to database")
+        else:
+            st.error("❌ Database connection failed after 3 attempts")
+            st.info("💡 The free database may be sleeping. Wait 30 seconds and refresh.")
+            st.warning("Showing sample data so the dashboard remains usable.")
 
     if full_df is None or full_df.empty:
         st.error("No data available")
