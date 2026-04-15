@@ -28,6 +28,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
+import time
 import sys
 sys.path.append('src')
 from predictions import generate_predictions_for_all, get_trading_signals, get_top_predictions
@@ -41,25 +42,69 @@ st.set_page_config(
 )
 
 
+def generate_sample_data():
+    """Generate sample data when database is unavailable."""
+    dates = pd.date_range(end=datetime.now(), periods=30, freq="D")
+    symbols = ["AAPL", "MSFT", "GOOGL"]
+    rows = []
+    for sym in symbols:
+        base = 140.0 + abs(hash(sym)) % 40
+        for i, d in enumerate(dates):
+            close = base + i * 0.35 + (i % 4) * 0.2
+            open_ = close - 0.8
+            high = close + 1.2
+            low = close - 1.5
+            vol = 45_000_000 + i * 250_000
+            dcp = 0.25 + (i % 3) * 0.1
+            ma5 = close - 0.4
+            ma20 = close - 1.1
+            rows.append(
+                {
+                    "symbol": sym,
+                    "date": d,
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": vol,
+                    "daily_change_percent": dcp,
+                    "ma_5": ma5,
+                    "ma_20": ma20,
+                }
+            )
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["date"])
+    return df.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+
 @st.cache_data(ttl=600)
-def load_all_data():
-    """Load all data from database - cached for 10 minutes"""
-    try:
-        engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-        with engine.connect() as conn:
-            query = text("SELECT * FROM stock_data ORDER BY date DESC")
-            df = pd.read_sql(query, conn)
-            if "date" in df.columns:
-                df["date"] = pd.to_datetime(df["date"])
+def load_data():
+    """Load data with retry logic for sleeping databases."""
+    max_retries = 3
+    retry_delay = 5  # seconds
 
-        # Sort for charts (ascending)
-        if "symbol" in df.columns and "date" in df.columns:
-            df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
+    for attempt in range(max_retries):
+        try:
+            engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+            with engine.connect() as conn:
+                query = text(
+                    "SELECT * FROM stock_data ORDER BY date DESC LIMIT 2000"
+                )
+                df = pd.read_sql(query, conn)
+                if "date" in df.columns:
+                    df["date"] = pd.to_datetime(df["date"])
 
-        return df
-    except Exception as e:
-        st.error(f"Database error: {e}")
-        return None
+            if "symbol" in df.columns and "date" in df.columns:
+                df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+            return df, True
+        except Exception:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                return generate_sample_data(), False
+
+    return pd.DataFrame(), False
 
 
 def format_number(num, decimals=2):
@@ -193,9 +238,16 @@ def main():
     # ============================================
     st.title("📈 Stock Market Dashboard")
 
-    # Load data ONCE from database (cached)
+    # Load data ONCE from database (cached, with retries)
     with st.spinner("Loading data from database..."):
-        full_df = load_all_data()
+        full_df, db_connected = load_data()
+
+    if db_connected:
+        st.success("📊 Connected to database")
+    else:
+        st.error("❌ Database connection failed after 3 attempts")
+        st.info("💡 The free database may be sleeping. Wait 30 seconds and refresh.")
+        st.warning("Showing sample data so the dashboard remains usable.")
 
     if full_df is None or full_df.empty:
         st.error("No data available")
