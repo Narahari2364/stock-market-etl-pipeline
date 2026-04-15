@@ -43,37 +43,52 @@ st.set_page_config(
 
 
 def generate_sample_data():
-    """Generate sample data when database is unavailable."""
-    dates = pd.date_range(end=datetime.now(), periods=30, freq="D")
-    symbols = ["AAPL", "MSFT", "GOOGL"]
-    rows = []
-    for sym in symbols:
-        base = 140.0 + abs(hash(sym)) % 40
-        for i, d in enumerate(dates):
-            close = base + i * 0.35 + (i % 4) * 0.2
-            open_ = close - 0.8
-            high = close + 1.2
-            low = close - 1.5
-            vol = 45_000_000 + i * 250_000
-            dcp = 0.25 + (i % 3) * 0.1
-            ma5 = close - 0.4
-            ma20 = close - 1.1
-            rows.append(
+    """Generate sample data when database is unavailable"""
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    # Generate realistic dates
+    end_date = datetime.now()
+    dates = pd.date_range(end=end_date, periods=100, freq="D")
+    symbols = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
+
+    data = []
+    base_prices = {"AAPL": 180, "MSFT": 380, "GOOGL": 140, "TSLA": 250, "NVDA": 500}
+
+    for symbol in symbols:
+        base = base_prices[symbol]
+        for date in dates:
+            price = base + np.random.randn() * 10
+            data.append(
                 {
-                    "symbol": sym,
-                    "date": d,
-                    "open": open_,
-                    "high": high,
-                    "low": low,
-                    "close": close,
-                    "volume": vol,
-                    "daily_change_percent": dcp,
-                    "ma_5": ma5,
-                    "ma_20": ma20,
+                    "symbol": symbol,
+                    "date": date,  # Timestamp / datetime-like from date_range
+                    "open": abs(price),
+                    "high": abs(price + np.random.randn() * 5),
+                    "low": abs(price - np.random.randn() * 5),
+                    "close": abs(price + np.random.randn() * 3),
+                    "volume": int(abs(50000000 + np.random.randn() * 10000000)),
+                    "daily_change": np.random.randn() * 2,
+                    "daily_change_percent": np.random.randn() * 1.5,
+                    "ma_5": abs(price),
+                    "ma_20": abs(price - 2),
+                    "price_range": abs(np.random.randn() * 5),
+                    "volatility_indicator": abs(np.random.randn() * 3),
+                    "volatility_category": np.random.choice(["Low", "Medium", "High"]),
+                    "volume_category": np.random.choice(["Low", "Medium", "High"]),
+                    "is_positive_day": np.random.choice([True, False]),
+                    "year": int(date.year),
+                    "month": int(date.month),
+                    "quarter": int(date.quarter),
+                    "day_of_week": date.day_name(),
+                    "price_vs_ma5": np.random.randn() * 2,
+                    "price_vs_ma20": np.random.randn() * 3,
                 }
             )
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"])
+
+    df = pd.DataFrame(data)
+    df["date"] = pd.to_datetime(df["date"])  # Ensure datetime type
     return df.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
@@ -282,10 +297,13 @@ def main():
         st.session_state.reset_filters = False
 
     # Default date range: last 30 days only (fast initial load)
-    max_dt = full_df["date"].max()
-    min_dt = full_df["date"].min()
-    default_end_date = max_dt.date()
-    default_start_date = (max_dt - timedelta(days=30)).date()
+    min_date = full_df["date"].min().date()
+    max_date = full_df["date"].max().date()
+    max_ts = full_df["date"].max()
+    default_end_date = max_date
+    default_start_date = (max_ts - timedelta(days=30)).date()
+    if default_start_date < min_date:
+        default_start_date = min_date
 
     # Initialize widget defaults in session state if not set or if reset was clicked
     if "symbols_multiselect" not in st.session_state or st.session_state.reset_filters:
@@ -313,8 +331,8 @@ def main():
         date_range = st.date_input(
             "Date Range",
             value=st.session_state.date_range_input,
-            min_value=min_dt.date(),
-            max_value=default_end_date,
+            min_value=min_date,
+            max_value=max_date,
             help="Select date range for analysis",
             key="date_range_input",
         )
