@@ -46,7 +46,7 @@ def generate_sample_data():
     """Generate sample data when database is unavailable"""
     import pandas as pd
     import numpy as np
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     # Generate realistic dates
     end_date = datetime.now()
