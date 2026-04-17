@@ -5,7 +5,7 @@ This module provides functions to load stock data into PostgreSQL database
 using SQLAlchemy ORM and pandas DataFrame operations.
 """
 
-import 
+import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
