@@ -465,4 +465,4 @@ if __name__ == "__main__":
     print(f"✓ Data fetched: {len(successful_fetches)}/{len(test_symbols)} symbols")
     print(f"✓ Data transformed: {df_transformed.shape[0]} rows, {df_transformed.shape[1]} columns")
     print(f"✓ Data saved: data/transformed_stock_data.csv")
-    print("="*60 + "\")
+    print("="*60 + "\n")
