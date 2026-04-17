@@ -12,7 +12,7 @@ import json
 import time
 import requests
 from typing import Dict, List, Optional
-from datetime import datetim
+from datetime import datetime
 
 
 def fetch_stock_data(symbol: str, interval: str = "daily") -> Dict:
