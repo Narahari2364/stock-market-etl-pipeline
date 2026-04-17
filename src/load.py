@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-import pandas as pd
+import pandas as 
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, List
