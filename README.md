@@ -1,11 +1,9 @@
 # 📈 Stock Market ETL Pipeline
 
-![Tests](https://github.com/YOUR_USERNAME/stock-market-etl-pipeline/workflows/Tests/badge.svg)
+![Tests](https://github.com/Narahari2364/stock-market-etl-pipeline/workflows/Tests/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Coverage](https://img.shields.io/badge/coverage-41%25-yellow.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-
-*(Replace YOUR_USERNAME with your actual GitHub username)*
 
 A production-ready ETL (Extract, Transform, Load) pipeline for processing stock market data from Alpha Vantage API into PostgreSQL database. This project demonstrates end-to-end data engineering practices including API integration, data transformation, database operations, and comprehensive error handling.
 
@@ -15,9 +13,9 @@ A production-ready ETL (Extract, Transform, Load) pipeline for processing stock 
 - **100%** data quality validation pass rate
 - **25** comprehensive unit tests
 - **41%** code coverage
-- **5** automated alerts/notifications
-- **Live dashboard** deployed on Streamlit Cloud
-- **Daily automated** data updates
+- **5** automated alerts/notifications (email + Slack)
+- **Streamlit dashboard** with charts, filters, and ML predictions
+- **Daily automated** data updates via scheduler
 
 ## 📋 Project Overview
 
@@ -109,21 +107,26 @@ Data quality reports are automatically generated in `logs/data_quality_*.txt`
 ```
 stock-market-etl-pipeline/
 ├── src/
-│   ├── __init__.py              # Package initialization
 │   ├── extract.py               # Alpha Vantage API data extraction
 │   ├── transform.py             # Data cleaning and transformation
 │   ├── load.py                  # PostgreSQL database operations
-│   └── pipeline.py              # Main ETL pipeline orchestrator
-├── data/                        # Output data files (CSV, Parquet, JSON)
-├── logs/                        # Pipeline execution logs
-├── config/                      # Configuration files
-├── tests/                       # Unit and integration tests
-├── dashboard/                   # Dashboard files (future)
+│   ├── pipeline.py              # Main ETL pipeline orchestrator
+│   ├── data_quality.py          # Great Expectations validation
+│   ├── predictions.py           # MA-based price predictions & signals
+│   ├── alerts.py                # Email notifications
+│   └── slack_alerts.py          # Slack notifications
+├── dashboard/
+│   ├── app.py                   # Streamlit dashboard (main)
+│   └── requirements.txt         # Dashboard dependencies
+├── tests/                       # Unit tests (extract, transform, load)
+├── .github/workflows/
+│   └── tests.yml                # GitHub Actions CI
+├── logs/                        # Pipeline, scheduler, and DQ reports
+├── scheduler.py                 # Daily 9:00 AM pipeline scheduler
+├── keep_alive.py                # Database keep-alive pings
 ├── requirements.txt             # Python dependencies
-├── .env                         # Environment variables (gitignored)
 ├── .env.example                 # Example environment variables
-├── .gitignore                   # Git ignore rules
-├── docker-compose.yml           # Docker Compose configuration
+├── docker-compose.yml           # PostgreSQL via Docker
 └── README.md                    # This file
 ```
 
@@ -140,7 +143,7 @@ stock-market-etl-pipeline/
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Narahari2364/stock-market-etl-pipeline.git
    cd stock-market-etl-pipeline
    ```
 
@@ -173,6 +176,15 @@ stock-market-etl-pipeline/
    docker-compose up -d
    ```
 
+### Running the Dashboard
+
+```bash
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+
+Set `DATABASE_URL` in `.env` (local) or Streamlit Cloud **Secrets** for live data. The dashboard falls back to sample data if the database is unavailable.
+
 ### Running the Pipeline
 
 **Interactive Mode** (Recommended for first-time users):
@@ -191,7 +203,7 @@ The pipeline will:
 ```
 ⚠️  API RATE LIMIT WARNING
 Alpha Vantage API has a rate limit of 5 calls per minute.
-For 5 default stocks: Estimated time: ~60 seconds
+For 17+ default stocks: Estimated time: ~5-6 minutes
 
 Enter stock symbols (comma-separated) or press Enter for default: 
 Proceed with ETL pipeline? (y/n): y
@@ -273,6 +285,11 @@ The ETL pipeline follows these 4 main steps:
    - Calculates derived features and technical indicators
    - Standardizes data format and column ordering
 
+2.5. **🔍 VALIDATE**
+   - Runs Great Expectations checks on transformed data
+   - Saves validation reports to `logs/data_quality_*.txt`
+   - Sends email/Slack alerts when quality falls below threshold
+
 3. **💾 LOAD**
    - Creates database tables if they don't exist
    - Loads transformed data to PostgreSQL in batches
@@ -349,24 +366,19 @@ Edit `scheduler.py` to change the schedule:
 ## 🎯 Future Enhancements
 
 - [ ] **Apache Airflow Integration**: Schedule and orchestrate pipeline runs with DAGs
-- [ ] **Streamlit Dashboard**: Interactive web dashboard for data visualization and analysis
 - [ ] **Kafka Integration**: Real-time data streaming with Kafka producers/consumers
-- [ ] **Machine Learning Models**: Predictive models for stock price forecasting
-- [ ] **Cloud Deployment**: Deploy to AWS/GCP/Azure with serverless functions
-- [ ] **Comprehensive Testing**: Unit tests, integration tests, and end-to-end test suite
-- [ ] **CI/CD Pipeline**: Automated testing and deployment with GitHub Actions
-- [ ] **Data Validation Framework**: Great Expectations or similar for data quality checks
-- [ ] **Multi-Source Integration**: Support for additional data sources (Yahoo Finance, IEX Cloud)
+- [ ] **Advanced ML models**: Beyond MA crossover (e.g. time-series forecasting)
+- [ ] **Cloud Deployment**: Deploy pipeline and dashboard to AWS/GCP/Azure
+- [ ] **Multi-Source Integration**: Additional data sources (Yahoo Finance, IEX Cloud)
 - [ ] **Incremental Loading**: Delta/incremental data loading strategies
 - [ ] **Data Lineage Tracking**: Track data transformations and dependencies
-- [ ] **Performance Monitoring**: Metrics and alerting for pipeline health
+- [ ] **Expand test coverage**: Increase from 41% toward 60%+ with edge-case tests
 
 ## 👤 Author
 
-**Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
-- Email: your.email@example.com
+**Narahari Bheemaganapalli**
+- GitHub: [@Narahari2364](https://github.com/Narahari2364)
+- Email: [naraharibn2364@gmail.com](mailto:naraharibn2364@gmail.com)
 
 ## 📝 License
 
