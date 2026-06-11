@@ -86,6 +86,24 @@ This project includes automated data quality checks using Great Expectations:
 
 Data quality reports are automatically generated in `logs/data_quality_*.txt`
 
+## ⚡ Performance
+
+Per-stage instrumentation (`perf_counter` + optional cProfile) logs duration and records/sec to `logs/perf_*.log`. Batch LOAD size is tunable via `LOAD_BATCH_SIZE` (default **2000** after benchmarking 500–5000).
+
+See **[PERFORMANCE.md](PERFORMANCE.md)** for bottleneck analysis and batch-size tuning results.
+
+```bash
+source venv/bin/activate
+docker compose up -d                        # Postgres must be running
+
+python scripts/benchmark_batch_size.py      # writes logs/benchmark_batch_size_*.txt
+python src/pipeline.py                      # writes logs/perf_*.log
+ENABLE_CPROFILE=1 python src/pipeline.py    # also writes logs/profile_*.txt
+
+# View latest perf log (quote the glob in zsh):
+ls -t logs/perf_*.log | head -1
+```
+
 ## 📊 Data Features
 
 ### Extracted Data
@@ -114,7 +132,10 @@ stock-market-etl-pipeline/
 │   ├── data_quality.py          # Great Expectations validation
 │   ├── predictions.py           # MA-based price predictions & signals
 │   ├── alerts.py                # Email notifications
-│   └── slack_alerts.py          # Slack notifications
+│   ├── slack_alerts.py          # Slack notifications
+│   └── performance.py           # Stage timing & throughput metrics
+├── scripts/
+│   └── benchmark_batch_size.py  # LOAD batch-size benchmark
 ├── dashboard/
 │   ├── app.py                   # Streamlit dashboard (main)
 │   └── requirements.txt         # Dashboard dependencies
@@ -189,7 +210,7 @@ Set `DATABASE_URL` in `.env` (local) or Streamlit Cloud **Secrets** for live dat
 
 **Interactive Mode** (Recommended for first-time users):
 ```bash
-python -m src.pipeline
+python src/pipeline.py
 ```
 
 The pipeline will:

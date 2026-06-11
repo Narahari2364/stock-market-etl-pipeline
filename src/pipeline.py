@@ -14,6 +14,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging
+import time
+import cProfile
+import pstats
+import io
 from datetime import datetime
 from typing import List, Optional
 from pathlib import Path
@@ -29,6 +33,9 @@ from slack_alerts import send_pipeline_success_slack, send_pipeline_failure_slac
 
 # Import data quality modules
 from data_quality import validate_stock_data, save_validation_report
+
+# Import performance instrumentation
+from performance import PipelinePerformanceTracker
 
 # Default symbols if none provided
 DEFAULT_SYMBOLS = [
@@ -116,6 +123,17 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
+def _write_profile_report(profiler: cProfile.Profile, perf_timestamp: str, logger: logging.Logger) -> None:
+    """Write cProfile cumulative stats to logs/profile_<timestamp>.txt."""
+    profile_path = Path("logs") / f"profile_{perf_timestamp}.txt"
+    stream = io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream).sort_stats("cumulative")
+    stats.print_stats(30)
+    with open(profile_path, "w", encoding="utf-8") as handle:
+        handle.write(stream.getvalue())
+    logger.info(f"🔬 cProfile report saved: {profile_path}")
+
+
 def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily") -> bool:
     """
     Run the complete ETL pipeline: Extract, Transform, Load.
@@ -150,6 +168,17 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
     logger.info(f"🕐 Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 80)
     logger.info("")
+
+    perf = PipelinePerformanceTracker()
+    load_batch_size = int(os.getenv("LOAD_BATCH_SIZE", "2000"))
+    logger.info(f"📈 Performance log: {perf.log_file}")
+    logger.info(f"📦 Load batch size: {load_batch_size}")
+
+    profile_enabled = os.getenv("ENABLE_CPROFILE", "").lower() in ("1", "true", "yes")
+    profiler = cProfile.Profile() if profile_enabled else None
+    if profiler:
+        profiler.enable()
+        logger.info("🔬 cProfile instrumentation enabled (ENABLE_CPROFILE=1)")
     
     try:
         # ============================================
@@ -159,7 +188,8 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.info("-" * 80)
         logger.info("📥 STEP 1: EXTRACT - Fetching stock data from Alpha Vantage API")
         logger.info("-" * 80)
-        
+
+        extract_start = perf.start_stage()
         try:
             raw_data_list = fetch_multiple_stocks(symbols, interval=interval, delay=12)
             
@@ -182,6 +212,11 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
                 symbol = data.get('symbol', 'UNKNOWN')
                 data_points = data.get('data_points', 0)
                 logger.info(f"   • {symbol}: {data_points} data points")
+
+            extract_records = sum(
+                data.get('data_points', 0) for data in successful_extracts
+            )
+            perf.end_stage("EXTRACT", extract_start, record_count=extract_records)
             
         except Exception as e:
             logger.error(f"❌ EXTRACT step failed: {str(e)}")
@@ -196,7 +231,8 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.info("-" * 80)
         logger.info("🔄 STEP 2: TRANSFORM - Cleaning and transforming stock data")
         logger.info("-" * 80)
-        
+
+        transform_start = perf.start_stage()
         try:
             df_transformed = transform_stock_data(raw_data_list)
             
@@ -221,7 +257,10 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
             memory_mb = df_transformed.memory_usage(deep=True).sum() / 1024**2
             logger.info(f"   ✓ Memory usage: {memory_mb:.2f} MB")
 
+            perf.end_stage("TRANSFORM", transform_start, record_count=len(df_transformed))
+
             logger.info("\n🔍 STEP 2.5: VALIDATE - Running data quality checks...")
+            validate_start = perf.start_stage()
             validation_results = validate_stock_data(df_transformed, log_results=True)
 
             if not validation_results['success']:
@@ -249,6 +288,12 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
 
             # Save validation report
             save_validation_report(validation_results)
+            perf.end_stage(
+                "VALIDATE",
+                validate_start,
+                record_count=len(df_transformed),
+                notes=f"success_rate={validation_results.get('success_rate', 0):.1f}%",
+            )
             
         except Exception as e:
             logger.error(f"❌ TRANSFORM step failed: {str(e)}")
@@ -263,7 +308,8 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.info("-" * 80)
         logger.info("💾 STEP 3: LOAD - Loading data to PostgreSQL database")
         logger.info("-" * 80)
-        
+
+        load_start = perf.start_stage()
         try:
             # Ensure database tables exist
             logger.info("Creating database tables if needed...")
@@ -271,11 +317,22 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
             
             # Load data to database
             logger.info("Loading transformed data to database...")
-            load_success = load_to_database(df_transformed)
+            load_success = load_to_database(
+                df_transformed,
+                chunksize=load_batch_size,
+                perf_tracker=perf,
+            )
             
             if not load_success:
                 logger.error("❌ LOAD step failed: Could not load data to database")
                 return False
+
+            perf.end_stage(
+                "LOAD",
+                load_start,
+                record_count=len(df_transformed),
+                notes=f"chunksize={load_batch_size}",
+            )
             
             logger.info("")
             logger.info("✅ Loading complete")
@@ -293,7 +350,8 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         logger.info("-" * 80)
         logger.info("📊 STEP 4: DATABASE SUMMARY - Retrieving database statistics")
         logger.info("-" * 80)
-        
+
+        summary_start = perf.start_stage()
         try:
             summary = get_database_summary()
             
@@ -320,7 +378,19 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
         except Exception as e:
             logger.warning(f"⚠️  Could not retrieve database summary: {str(e)}")
             # Don't fail the pipeline if summary fails
-        
+        finally:
+            perf.end_stage("SUMMARY", summary_start, record_count=0)
+
+        perf_summary = perf.finalize(total_records=len(df_transformed))
+        logger.info(f"📈 Performance report saved: {perf_summary['log_file']}")
+        for stage in perf_summary["stages"]:
+            if "pct_of_total" in stage:
+                logger.info(
+                    f"   ⏱️  {stage['stage']}: {stage['duration_sec']:.2f}s "
+                    f"({stage['pct_of_total']:.1f}% of runtime, "
+                    f"{stage['records_per_sec']:,.0f} rec/s)"
+                )
+
         # ============================================
         # PIPELINE COMPLETE
         # ============================================
@@ -376,6 +446,10 @@ def run_etl_pipeline(symbols: Optional[List[str]] = None, interval: str = "daily
             logger.warning(f"Failed to send failure alerts: {alert_error}")
         
         return False
+    finally:
+        if profiler:
+            profiler.disable()
+            _write_profile_report(profiler, perf.timestamp, logger)
 
 
 if __name__ == "__main__":

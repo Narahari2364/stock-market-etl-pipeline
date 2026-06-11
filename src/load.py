@@ -11,10 +11,11 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+import time
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from sqlalchemy import create_engine, Column, Integer, String, Date, Float, BigInteger, Boolean, DateTime, Index, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
@@ -173,7 +174,13 @@ def create_tables(engine=None):
         return False
 
 
-def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_data') -> bool:
+def load_to_database(
+    df: pd.DataFrame,
+    engine=None,
+    table_name: str = 'stock_data',
+    chunksize: Optional[int] = None,
+    perf_tracker: Optional[Any] = None,
+) -> bool:
     """
     Load DataFrame to PostgreSQL database.
     
@@ -181,6 +188,8 @@ def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_dat
         df: DataFrame to load (must have columns matching StockData model)
         engine: SQLAlchemy engine (optional, will create if not provided)
         table_name: Target table name (default: 'stock_data')
+        chunksize: Records per batch (default: LOAD_BATCH_SIZE env or 2000)
+        perf_tracker: Optional PipelinePerformanceTracker for batch metrics
     
     Returns:
         True if successful, False otherwise
@@ -235,16 +244,24 @@ def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_dat
         print(f"Records in database before load: {initial_count}")
         print(f"Records to load: {len(df_to_load)}")
         
-        # Load data in batches
-        chunksize = 1000
-        total_chunks = (len(df_to_load) // chunksize) + (1 if len(df_to_load) % chunksize > 0 else 0)
-        
+        # Load data in batches (tunable via LOAD_BATCH_SIZE)
+        if chunksize is None:
+            chunksize = int(os.getenv("LOAD_BATCH_SIZE", "2000"))
+
+        total_chunks = (len(df_to_load) // chunksize) + (
+            1 if len(df_to_load) % chunksize > 0 else 0
+        )
+
         print(f"Loading in {total_chunks} batch(es) of {chunksize} records...")
-        
+
         for i, chunk in enumerate(range(0, len(df_to_load), chunksize), 1):
             chunk_df = df_to_load.iloc[chunk:chunk + chunksize]
-            print(f"  Loading batch {i}/{total_chunks} ({len(chunk_df)} records)...", end=' ')
-            
+            print(
+                f"  Loading batch {i}/{total_chunks} ({len(chunk_df)} records)...",
+                end=" ",
+            )
+
+            batch_start = time.perf_counter()
             try:
                 chunk_df.to_sql(
                     table_name,
@@ -254,8 +271,18 @@ def load_to_database(df: pd.DataFrame, engine=None, table_name: str = 'stock_dat
                     method='multi',
                     chunksize=chunksize
                 )
-                print("✓")
-                
+                batch_elapsed = time.perf_counter() - batch_start
+                if perf_tracker is not None:
+                    perf_tracker.log_batch(
+                        batch_number=i,
+                        batch_size=len(chunk_df),
+                        duration_sec=batch_elapsed,
+                        records_loaded=len(chunk_df),
+                        chunksize=chunksize,
+                    )
+                batch_rps = len(chunk_df) / batch_elapsed if batch_elapsed > 0 else 0
+                print(f"✓ ({batch_elapsed:.2f}s, {batch_rps:,.0f} rec/s)")
+
             except Exception as e:
                 print(f"✗")
                 print(f"    ERROR in batch {i}: {str(e)}")
