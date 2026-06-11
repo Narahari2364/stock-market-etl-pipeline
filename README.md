@@ -13,7 +13,7 @@ A production-ready ETL (Extract, Transform, Load) pipeline for processing stock 
 - **100%** data quality validation pass rate
 - **25** comprehensive unit tests
 - **41%** code coverage
-- **5** automated alerts/notifications (email + Slack)
+- **3** automated alert types (pipeline success, pipeline failure, data quality warnings) via **email** and **Slack**
 - **Streamlit dashboard** with charts, filters, and ML predictions
 - **Daily automated** data updates via scheduler
 
@@ -290,7 +290,7 @@ The pipeline creates a `stock_data` table with the following key columns:
 
 ## 🔄 Pipeline Flow
 
-The ETL pipeline follows these 4 main steps:
+The ETL pipeline follows these 5 main steps:
 
 1. **📥 EXTRACT**
    - Fetches stock data from Alpha Vantage API
@@ -305,18 +305,18 @@ The ETL pipeline follows these 4 main steps:
    - Calculates derived features and technical indicators
    - Standardizes data format and column ordering
 
-2.5. **🔍 VALIDATE**
+3. **🔍 VALIDATE**
    - Runs Great Expectations checks on transformed data
    - Saves validation reports to `logs/data_quality_*.txt`
    - Sends email/Slack alerts when quality falls below threshold
 
-3. **💾 LOAD**
+4. **💾 LOAD**
    - Creates database tables if they don't exist
    - Loads transformed data to PostgreSQL in batches
-   - Uses efficient batch processing (1000 records per chunk)
+   - Uses efficient batch processing (default **2000** records per chunk via `LOAD_BATCH_SIZE`)
    - Tracks record counts and loading progress
 
-4. **📊 SUMMARY**
+5. **📊 SUMMARY**
    - Retrieves database statistics
    - Displays total records, unique symbols, date ranges
    - Shows average metrics (close price, volume, daily change)
