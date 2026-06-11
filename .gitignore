@@ -43,7 +43,8 @@ data/
 *.json
 
 # Logs
-logs/
+logs/*
+!logs/benchmark_batch_size_*.txt
 *.log
 
 # OS

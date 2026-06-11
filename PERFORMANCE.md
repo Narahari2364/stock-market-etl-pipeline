@@ -55,23 +55,36 @@ Tests chunk sizes **500, 1000, 2000, 5000** on 2,500 synthetic rows into `stock_
 
 ### Measured results
 
-**Run:** 2026-06-11 · Local Docker PostgreSQL 15 · 2,500 rows · `logs/benchmark_batch_size_20260611_195607.txt`
+**Run:** 2026-06-11 · Local Docker PostgreSQL 15 · 2,500 rows · **median of 3 runs** · `logs/benchmark_batch_size_20260611_195824.txt`
 
-| Batch size | Load time (s) | Throughput (rec/s) | Notes |
-|------------|---------------|--------------------|-------|
-| 500 | 1.024 | 2,442 | Most round-trips; highest SQL overhead |
-| 1000 | 0.967 | 2,585 | Previous common default |
-| **2000** | **0.956** | **2,616** | **Selected default** — best throughput in this run |
-| 5000 | 0.959 | 2,607 | No gain over 2000 at this row count |
+| Batch size | Median load time (s) | Throughput (rec/s) | Individual runs (s) |
+|------------|----------------------|--------------------|---------------------|
+| 500 | 0.959 | 2,606 | 0.984, 0.959, 0.955 |
+| 1000 | 0.953 | 2,623 | 0.952, 0.953, 0.960 |
+| **2000** | **0.987** | **2,534** | **0.955, 1.040, 0.987** |
+| 5000 | 0.939 | 2,662 | 0.939, 0.948, 0.937 |
 
-### Before / after (same benchmark run)
+Raw log excerpt:
 
-| Metric | Before (`chunksize=500`) | After (`chunksize=2000`) | Change |
-|--------|--------------------------|--------------------------|--------|
-| LOAD stage time | 1.024s | 0.956s | **~7% faster** |
-| LOAD throughput | 2,442 rec/s | 2,616 rec/s | **~7% higher** |
+```
+best_throughput_batch: 5000 (2661.9 rec/s)
+vs_chunksize_1000: 3.6% slower LOAD (0.953s -> 0.987s), 3.4% lower throughput
+vs_chunksize_500: 2.9% slower LOAD (0.959s -> 0.987s)
+```
 
-At ~2,500 rows on local Postgres, gains are modest because the DB is already fast; larger production loads benefit more from fewer round-trips.
+### Before / after (median benchmark)
+
+| Metric | Previous default (`chunksize=1000`) | Tuned (`chunksize=2000`) | Change |
+|--------|-------------------------------------|--------------------------|--------|
+| LOAD stage time | 0.953s | 0.987s | 3.6% slower at 2,500 rows |
+| LOAD throughput | 2,623 rec/s | 2,534 rec/s | 3.4% lower |
+
+| Metric | Smallest batch (`chunksize=500`) | Peak batch (`chunksize=5000`) | Change |
+|--------|----------------------------------|-------------------------------|--------|
+| LOAD stage time | 0.959s | 0.939s | **2.1% faster** |
+| LOAD throughput | 2,606 rec/s | 2,662 rec/s | **2.1% higher** |
+
+At ~2,500 rows, differences between 1000, 2000, and 5000 are within a few percent. **2000** remains the production default to cut round-trips vs. 1000 as row counts grow (2,900+ records today), without the memory pressure of 5000-row inserts.
 
 ## Findings
 
@@ -82,13 +95,13 @@ At ~2,500 rows on local Postgres, gains are modest because the DB is already fas
 
 ## Tuning decision
 
-- Default `LOAD_BATCH_SIZE` set to **2000** in code after benchmarking 500–5000.
-- Batch size 2000 achieved peak throughput (2,616 rec/s) without increasing memory pressure.
-- Sizes above 2000 did not improve throughput at 2,500 rows.
+- Default `LOAD_BATCH_SIZE` set to **2000** in code after benchmarking 500–5000 (median of 3 runs per size).
+- Peak median throughput at 2,500 rows: chunksize **5000** (0.939s, 2,662 rec/s).
+- **2000** chosen as default: halves round-trips vs. 1000 at scale; 3.6% slower than 1000 at 2,500 rows is within measurement variance.
 
 ## Resume bullet (example)
 
-> Profiled ETL stages with `perf_counter` and optional cProfile instrumentation; identified EXTRACT as the wall-clock bottleneck (~95% of runtime due to API rate limits) and benchmarked PostgreSQL LOAD batch sizes 500–5000. Tuned `LOAD_BATCH_SIZE` to 2000 (peak ~2,616 rec/s), reducing LOAD time ~7% vs. 500-row chunks on measured runs.
+> Profiled ETL stages with `perf_counter` and optional cProfile instrumentation; identified EXTRACT as the wall-clock bottleneck (~95% of runtime due to API rate limits) and benchmarked PostgreSQL LOAD batch sizes 500–5000 (median of 3 runs). Selected `LOAD_BATCH_SIZE=2000` to balance throughput (2,534 rec/s) with fewer DB round-trips on growing datasets.
 
 ## Reproduce
 

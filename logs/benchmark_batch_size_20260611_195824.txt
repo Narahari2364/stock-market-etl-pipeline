@@ -1,0 +1,16 @@
+LOAD BATCH SIZE BENCHMARK
+timestamp: 20260611_195824
+records: 2500
+runs_per_size: 3
+aggregation: median
+batch_sizes_tested: [500, 1000, 2000, 5000]
+selected_default: 2000
+best_throughput_batch: 5000 (2661.9 rec/s)
+vs_chunksize_1000: 3.6% slower LOAD (0.953s -> 0.987s), 3.4% lower throughput
+vs_chunksize_500: 2.9% slower LOAD (0.959s -> 0.987s)
+
+batch_size,duration_sec,records,records_per_sec,success,run_durations_sec
+500,0.959,2500,2606.3,True,"[0.984, 0.959, 0.955]"
+1000,0.953,2500,2623.0,True,"[0.952, 0.953, 0.96]"
+2000,0.987,2500,2533.6,True,"[0.955, 1.04, 0.987]"
+5000,0.939,2500,2661.9,True,"[0.939, 0.948, 0.937]"

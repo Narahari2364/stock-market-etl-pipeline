@@ -10,6 +10,7 @@ Usage:
 """
 
 import os
+import statistics
 import sys
 import time
 from datetime import datetime, timedelta
@@ -77,7 +78,23 @@ def generate_benchmark_df(rows: int = 2500) -> pd.DataFrame:
     return pd.DataFrame(records[:rows])
 
 
-def run_benchmark(batch_sizes=None, table_name: str = "stock_data_benchmark") -> list:
+def _load_once(df, engine, table_name: str, chunksize: int) -> tuple:
+    with engine.connect() as conn:
+        conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        conn.execute(text(f"CREATE TABLE {table_name} (LIKE stock_data INCLUDING ALL)"))
+        conn.commit()
+
+    start = time.perf_counter()
+    ok = load_to_database(df, engine=engine, table_name=table_name, chunksize=chunksize)
+    elapsed = time.perf_counter() - start
+    return ok, elapsed
+
+
+def run_benchmark(
+    batch_sizes=None,
+    table_name: str = "stock_data_benchmark",
+    runs_per_size: int = 3,
+) -> list:
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set")
@@ -86,61 +103,128 @@ def run_benchmark(batch_sizes=None, table_name: str = "stock_data_benchmark") ->
     df = generate_benchmark_df(rows=2500)
     engine = create_engine(database_url, pool_pre_ping=True)
     results = []
+    raw_runs = {}
 
     print("=" * 72)
     print("LOAD BATCH SIZE BENCHMARK")
     print("=" * 72)
     print(f"Records: {len(df):,}")
     print(f"Batch sizes: {batch_sizes}")
+    print(f"Runs per size (median reported): {runs_per_size}")
     print()
 
     for size in batch_sizes:
-        with engine.connect() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            conn.execute(
-                text(f"CREATE TABLE {table_name} (LIKE stock_data INCLUDING ALL)")
-            )
-            conn.commit()
+        timings = []
+        ok = True
+        for run in range(1, runs_per_size + 1):
+            run_ok, elapsed = _load_once(df, engine, table_name, size)
+            ok = ok and run_ok
+            timings.append(elapsed)
+            print(f"chunksize={size:>5} run {run}/{runs_per_size} | {elapsed:7.3f}s | ok={run_ok}")
 
-        start = time.perf_counter()
-        ok = load_to_database(
-            df,
-            engine=engine,
-            table_name=table_name,
-            chunksize=size,
-        )
-        elapsed = time.perf_counter() - start
-        throughput = len(df) / elapsed if elapsed > 0 and ok else 0
+        median_elapsed = statistics.median(timings)
+        throughput = len(df) / median_elapsed if median_elapsed > 0 and ok else 0
+        raw_runs[size] = [round(t, 3) for t in timings]
 
         row = {
             "batch_size": size,
-            "duration_sec": round(elapsed, 3),
+            "duration_sec": round(median_elapsed, 3),
             "records": len(df),
             "records_per_sec": round(throughput, 1),
             "success": ok,
+            "run_durations_sec": raw_runs[size],
         }
         results.append(row)
         print(
-            f"chunksize={size:>5} | {elapsed:7.3f}s | "
-            f"{throughput:8,.1f} rec/s | ok={ok}"
+            f"chunksize={size:>5} MEDIAN | {median_elapsed:7.3f}s | "
+            f"{throughput:8,.1f} rec/s | runs={raw_runs[size]}"
         )
+        print()
 
     logs_dir = ROOT / "logs"
     logs_dir.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = logs_dir / f"benchmark_batch_size_{stamp}.txt"
+
+    best = max(results, key=lambda r: r["records_per_sec"])
+    by_size = {r["batch_size"]: r for r in results}
+    baseline_1000 = by_size.get(1000)
+    selected = by_size.get(2000) or best
+
+    def pct_faster(before: dict, after: dict) -> float:
+        if not before or not after or before["duration_sec"] <= 0:
+            return 0.0
+        return (before["duration_sec"] - after["duration_sec"]) / before["duration_sec"] * 100
+
+    def pct_throughput_gain(before: dict, after: dict) -> float:
+        if not before or not after or before["records_per_sec"] <= 0:
+            return 0.0
+        return (after["records_per_sec"] - before["records_per_sec"]) / before["records_per_sec"] * 100
+
+    vs_1000_time = pct_faster(baseline_1000, selected)
+    vs_1000_rps = pct_throughput_gain(baseline_1000, selected)
+    vs_500 = by_size.get(500)
+    vs_500_time = pct_faster(vs_500, selected) if vs_500 else 0.0
+
     with open(out_file, "w", encoding="utf-8") as handle:
-        handle.write("batch_size,duration_sec,records,records_per_sec,success\n")
+        handle.write("LOAD BATCH SIZE BENCHMARK\n")
+        handle.write(f"timestamp: {stamp}\n")
+        handle.write(f"records: {len(df)}\n")
+        handle.write(f"runs_per_size: {runs_per_size}\n")
+        handle.write(f"aggregation: median\n")
+        handle.write(f"batch_sizes_tested: {batch_sizes}\n")
+        handle.write(f"selected_default: {selected['batch_size']}\n")
+        handle.write(f"best_throughput_batch: {best['batch_size']} ({best['records_per_sec']} rec/s)\n")
+        if baseline_1000 and selected:
+            time_cmp = (
+                f"{vs_1000_time:.1f}% faster"
+                if vs_1000_time >= 0
+                else f"{abs(vs_1000_time):.1f}% slower"
+            )
+            rps_cmp = (
+                f"{vs_1000_rps:.1f}% higher"
+                if vs_1000_rps >= 0
+                else f"{abs(vs_1000_rps):.1f}% lower"
+            )
+            handle.write(
+                f"vs_chunksize_1000: {time_cmp} LOAD "
+                f"({baseline_1000['duration_sec']}s -> {selected['duration_sec']}s), "
+                f"{rps_cmp} throughput\n"
+            )
+        if vs_500 and selected:
+            time_cmp_500 = (
+                f"{vs_500_time:.1f}% faster"
+                if vs_500_time >= 0
+                else f"{abs(vs_500_time):.1f}% slower"
+            )
+            handle.write(
+                f"vs_chunksize_500: {time_cmp_500} LOAD "
+                f"({vs_500['duration_sec']}s -> {selected['duration_sec']}s)\n"
+            )
+        handle.write("\n")
+        handle.write("batch_size,duration_sec,records,records_per_sec,success,run_durations_sec\n")
         for row in results:
             handle.write(
                 f"{row['batch_size']},{row['duration_sec']},"
-                f"{row['records']},{row['records_per_sec']},{row['success']}\n"
+                f"{row['records']},{row['records_per_sec']},{row['success']},"
+                f"\"{row['run_durations_sec']}\"\n"
             )
 
     print()
     print(f"Results saved: {out_file}")
-    best = max(results, key=lambda r: r["records_per_sec"])
     print(f"Best throughput: chunksize={best['batch_size']} ({best['records_per_sec']:,.1f} rec/s)")
+    if baseline_1000 and selected:
+        time_cmp = (
+            f"{vs_1000_time:.1f}% faster"
+            if vs_1000_time >= 0
+            else f"{abs(vs_1000_time):.1f}% slower"
+        )
+        rps_cmp = (
+            f"{vs_1000_rps:.1f}% higher"
+            if vs_1000_rps >= 0
+            else f"{abs(vs_1000_rps):.1f}% lower"
+        )
+        print(f"vs chunksize 1000: {time_cmp} LOAD, {rps_cmp} throughput")
     return results
 
 

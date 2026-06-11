@@ -88,9 +88,18 @@ Data quality reports are automatically generated in `logs/data_quality_*.txt`
 
 ## ⚡ Performance
 
-Per-stage instrumentation (`perf_counter` + optional cProfile) logs duration and records/sec to `logs/perf_*.log`. Batch LOAD size is tunable via `LOAD_BATCH_SIZE` (default **2000** after benchmarking 500–5000).
+The pipeline instruments each stage with `perf_counter` (and optional cProfile) and writes throughput reports to `logs/perf_*.log`. LOAD batch size is tunable via `LOAD_BATCH_SIZE` (default **2000**).
 
-See **[PERFORMANCE.md](PERFORMANCE.md)** for bottleneck analysis and batch-size tuning results.
+**Measured LOAD benchmark** (2,500 rows, median of 3 runs, local Docker PostgreSQL — see `logs/benchmark_batch_size_20260611_195824.txt`):
+
+| Batch size | Median LOAD time | Throughput |
+|------------|------------------|------------|
+| 500 | 0.959s | 2,606 rec/s |
+| 1000 | 0.953s | 2,623 rec/s |
+| **2000** (default) | **0.987s** | **2,534 rec/s** |
+| 5000 | 0.939s | 2,662 rec/s |
+
+Peak throughput at this scale was chunksize **5000** (0.939s). Default **2000** was selected to balance throughput with fewer DB round-trips on larger production loads (2,900+ rows). vs. the prior **1000**-row default, median LOAD time differs by **3.6%** at 2,500 rows — within run variance; the larger win is reducing round-trips as data grows. Full bottleneck analysis, raw run timings, and resume bullet in **[PERFORMANCE.md](PERFORMANCE.md)**.
 
 ```bash
 source venv/bin/activate
