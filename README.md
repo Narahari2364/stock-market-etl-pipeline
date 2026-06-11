@@ -96,12 +96,11 @@ See **[PERFORMANCE.md](PERFORMANCE.md)** for bottleneck analysis and batch-size 
 source venv/bin/activate
 docker compose up -d                        # Postgres must be running
 
-python scripts/benchmark_batch_size.py      # writes logs/benchmark_batch_size_*.txt
-python src/pipeline.py                      # writes logs/perf_*.log
-ENABLE_CPROFILE=1 python src/pipeline.py    # also writes logs/profile_*.txt
+python scripts/benchmark_batch_size.py      # writes to logs/
+python src/pipeline.py                      # writes perf log to logs/
+ENABLE_CPROFILE=1 python src/pipeline.py    # also writes profile report to logs/
 
-# View latest perf log (quote the glob in zsh):
-ls -t logs/perf_*.log | head -1
+ls -t logs/
 ```
 
 ## 📊 Data Features

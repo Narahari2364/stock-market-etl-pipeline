@@ -97,6 +97,9 @@ def run_benchmark(batch_sizes=None, table_name: str = "stock_data_benchmark") ->
     for size in batch_sizes:
         with engine.connect() as conn:
             conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            conn.execute(
+                text(f"CREATE TABLE {table_name} (LIKE stock_data INCLUDING ALL)")
+            )
             conn.commit()
 
         start = time.perf_counter()

@@ -236,10 +236,14 @@ def load_to_database(
         # Replace NaN with None for SQL compatibility
         df_to_load = df_to_load.where(pd.notnull(df_to_load), None)
         
-        # Get initial record count
+        # Get initial record count (0 if target table does not exist yet)
+        initial_count = 0
         with engine.connect() as conn:
-            result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-            initial_count = result.scalar() or 0
+            try:
+                result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                initial_count = result.scalar() or 0
+            except SQLAlchemyError:
+                initial_count = 0
         
         print(f"Records in database before load: {initial_count}")
         print(f"Records to load: {len(df_to_load)}")
