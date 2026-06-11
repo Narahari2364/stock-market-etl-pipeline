@@ -1,0 +1,38 @@
+         3848523 function calls (3727238 primitive calls) in 29.721 seconds
+
+   Ordered by: cumulative time
+   List reduced from 4607 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.002    0.002   24.583   24.583 /Users/narah/Documents/stock-market-etl-pipeline/src/extract.py:273(fetch_multiple_stocks)
+        2   24.006   12.003   24.006   12.003 {built-in method time.sleep}
+      118    0.001    0.000    3.544    0.030 {method 'readline' of '_io.BufferedReader' objects}
+       24    0.000    0.000    3.544    0.148 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socket.py:690(readinto)
+        1    0.000    0.000    3.436    3.436 /Users/narah/Documents/stock-market-etl-pipeline/src/alerts.py:94(send_pipeline_success_email)
+        1    0.000    0.000    3.436    3.436 /Users/narah/Documents/stock-market-etl-pipeline/src/alerts.py:11(send_email_alert)
+       21    0.000    0.000    3.271    0.156 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/ssl.py:1230(recv_into)
+       21    0.000    0.000    3.271    0.156 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/ssl.py:1090(read)
+       21    3.271    0.156    3.271    0.156 {method 'read' of '_ssl._SSLSocket' objects}
+       10    0.000    0.000    3.189    0.319 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/smtplib.py:375(getreply)
+        1    0.000    0.000    2.498    2.498 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/smtplib.py:907(send_message)
+        1    0.000    0.000    2.496    2.496 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/smtplib.py:803(sendmail)
+        1    0.000    0.000    2.382    2.382 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/smtplib.py:551(data)
+        1    0.000    0.000    0.977    0.977 /Users/narah/Documents/stock-market-etl-pipeline/src/data_quality.py:131(validate_stock_data)
+        4    0.000    0.000    0.854    0.213 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/requests/api.py:14(request)
+        4    0.000    0.000    0.853    0.213 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/requests/sessions.py:500(request)
+       16    0.000    0.000    0.791    0.049 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/validator.py:988(graph_validate)
+        4    0.000    0.000    0.716    0.179 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/requests/sessions.py:673(send)
+        4    0.000    0.000    0.715    0.179 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/requests/adapters.py:590(send)
+        4    0.000    0.000    0.713    0.178 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/urllib3/connectionpool.py:592(urlopen)
+        4    0.000    0.000    0.712    0.178 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/urllib3/connectionpool.py:377(_make_request)
+    11478    0.007    0.000    0.612    0.000 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/metric_configuration.py:155(id)
+    22956    0.045    0.000    0.590    0.000 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/core/id_dict.py:14(to_id)
+        3    0.001    0.000    0.575    0.192 /Users/narah/Documents/stock-market-etl-pipeline/src/extract.py:18(fetch_stock_data)
+        3    0.000    0.000    0.573    0.191 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/requests/api.py:62(get)
+        3    0.000    0.000    0.549    0.183 /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/smtplib.py:424(docmd)
+       16    0.000    0.000    0.511    0.032 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/validator.py:1181(_resolve_suite_level_graph_and_process_metric_evaluation_errors)
+    11478    0.006    0.000    0.495    0.000 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/metric_configuration.py:71(metric_domain_kwargs_id)
+       15    0.000    0.000    0.467    0.031 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/validator.py:478(inst_expectation)
+       16    0.000    0.000    0.467    0.029 /Users/narah/Documents/stock-market-etl-pipeline/venv/lib/python3.9/site-packages/great_expectations/validator/metrics_calculator.py:253(resolve_validation_graph)
+
+
