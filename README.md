@@ -2,7 +2,7 @@
 
 ![Tests](https://github.com/Narahari2364/stock-market-etl-pipeline/workflows/Tests/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![Coverage](https://img.shields.io/badge/coverage-41%25-yellow.svg)
+![Coverage](https://img.shields.io/badge/coverage-62%25-yellow.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 A production-ready ETL (Extract, Transform, Load) pipeline for processing stock market data from Alpha Vantage API into PostgreSQL database. This project demonstrates end-to-end data engineering practices including API integration, data transformation, database operations, and comprehensive error handling.
@@ -10,10 +10,8 @@ A production-ready ETL (Extract, Transform, Load) pipeline for processing stock 
 ## 📊 Project Stats
 
 - **2900+** stock records across **17 symbols**
+- **106** unit tests with **62%** code coverage
 - **100%** data quality validation pass rate
-- **25** comprehensive unit tests
-- **41%** code coverage
-- **3** automated alert types (pipeline success, pipeline failure, data quality warnings) via **email** and **Slack**
 - **Streamlit dashboard** with charts, filters, and ML predictions
 - **Daily automated** data updates via scheduler
 
@@ -48,9 +46,9 @@ This project demonstrates:
 
 ## 🧪 Testing
 
-This project includes comprehensive unit tests with 41% code coverage:
+This project includes comprehensive unit tests with 62% code coverage:
 
-- **25 test cases** covering extraction, transformation, and loading
+- **106 test cases** covering extraction, transformation, loading, data quality, alerts, and predictions
 - **Mocked external dependencies** (API calls, database)
 - **Automated CI/CD** with GitHub Actions
 - **Coverage reports** generated with pytest-cov
@@ -295,7 +293,7 @@ The pipeline creates a `stock_data` table with the following key columns:
 - Primary key on `id`
 - Index on `symbol`
 - Index on `date`
-- Composite index on `(symbol, date)` for query optimization
+- Composite index on `(symbol, date)` for query optimization — dashboard and prediction queries filter by symbol and date range together, so this index avoids full-table scans on the largest queries
 
 ## 🔄 Pipeline Flow
 
@@ -401,8 +399,6 @@ Edit `scheduler.py` to change the schedule:
 - [ ] **Multi-Source Integration**: Additional data sources (Yahoo Finance, IEX Cloud)
 - [ ] **Incremental Loading**: Delta/incremental data loading strategies
 - [ ] **Data Lineage Tracking**: Track data transformations and dependencies
-- [ ] **Expand test coverage**: Increase from 41% toward 60%+ with edge-case tests
-
 ## 👤 Author
 
 **Narahari Bheemaganapalli**
