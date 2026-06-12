@@ -1,0 +1,83 @@
+name: Keep Streamlit Dashboard Awake
+
+on:
+  schedule:
+    # Runs every 6 hours (at minute 0). Cron times are UTC.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # lets me trigger it manually from the Actions tab
+
+jobs:
+  ping-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visit and wake dashboard
+        env:
+          DASHBOARD_URL: https://stock-market-etl-pipeline-5rp9gkvb5jlekm9tcasqqw.streamlit.app
+        run: |
+          python <<'EOF'
+          import os
+          import time
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["DASHBOARD_URL"]
+          print(f"Visiting {url}")
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              context = browser.new_context()
+              page = context.new_page()
+
+              try:
+                  page.goto(url, timeout=120000, wait_until="domcontentloaded")
+              except Exception as e:
+                  print(f"Initial navigation note: {e}")
+
+              # Give the page a moment to render
+              time.sleep(10)
+
+              # If the app is sleeping, click the wake-up button
+              wake_selectors = [
+                  'button:has-text("Yes, get this app back up!")',
+                  'button:has-text("Yes, get this app back up")',
+                  'button:has-text("get this app back up")',
+              ]
+              clicked = False
+              for selector in wake_selectors:
+                  try:
+                      page.click(selector, timeout=3000)
+                      print(f"Clicked wake-up button: {selector}")
+                      clicked = True
+                      break
+                  except Exception:
+                      continue
+
+              if clicked:
+                  print("App was sleeping. Waiting 60s for it to wake up...")
+                  time.sleep(60)
+              else:
+                  print("App was already awake (no wake-up button found).")
+
+              # Final wait to confirm the app fully renders
+              time.sleep(15)
+              print(f"Final URL: {page.url}")
+              print(f"Final title: {page.title()}")
+
+              browser.close()
+
+          print("Keepalive ping complete.")
+          EOF
