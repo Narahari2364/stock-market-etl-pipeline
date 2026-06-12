@@ -42,6 +42,17 @@ st.set_page_config(
 )
 
 
+def mask_database_url(db_url):
+    """Show host only in errors (never log password)."""
+    if not db_url or "@" not in db_url:
+        return "(not configured)"
+    try:
+        host_part = db_url.split("@", 1)[1]
+        return host_part.split("/")[0]
+    except Exception:
+        return "(invalid URL format)"
+
+
 def create_db_engine(db_url=None):
     """SQLAlchemy engine with Render Postgres-friendly SSL and timeouts."""
     url = db_url or DATABASE_URL
@@ -288,9 +299,14 @@ def main():
         db_healthy, db_message = check_database_health()
 
     if not db_healthy:
+        configured_host = mask_database_url(DATABASE_URL)
         st.warning(f"⚠️ Database unavailable: {db_message[:100]}")
-        st.info("💡 Showing sample data. Database may be sleeping (free tier limits).")
-        st.info("🔄 To use live data: Wait 60 seconds and click 'Rerun' or refresh page.")
+        st.caption(f"Configured database host: `{configured_host}`")
+        st.info(
+            "💡 Showing sample data. Common causes: **stale DATABASE_URL in Streamlit secrets** "
+            "(old Render instance), sleeping free-tier DB, or empty new database."
+        )
+        st.info("🔄 Fix: Update Streamlit **Settings → Secrets** with your current Render External URL, then Reboot app.")
 
         if st.button("🔄 Try Reconnecting to Database", type="primary"):
             st.cache_data.clear()
