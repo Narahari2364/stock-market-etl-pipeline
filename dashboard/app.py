@@ -42,6 +42,16 @@ st.set_page_config(
 )
 
 
+def create_db_engine(db_url=None):
+    """SQLAlchemy engine with Render Postgres-friendly SSL and timeouts."""
+    url = db_url or DATABASE_URL
+    connect_args = {"connect_timeout": 30}
+    if "render.com" in url and "sslmode=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
+    return create_engine(url, pool_pre_ping=True, connect_args=connect_args)
+
+
 def generate_sample_data():
     """Generate sample data when database is unavailable"""
     import pandas as pd
@@ -100,7 +110,7 @@ def load_data():
 
     for attempt in range(max_retries):
         try:
-            engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+            engine = create_db_engine()
             with engine.connect() as conn:
                 query = text(
                     "SELECT * FROM stock_data ORDER BY date DESC LIMIT 2000"
@@ -122,19 +132,25 @@ def load_data():
     return pd.DataFrame(), False
 
 
-def check_database_health():
-    """Check if database is reachable"""
-    try:
-        db_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
-        if not db_url:
-            return False, "No DATABASE_URL configured"
+def check_database_health(max_retries=4, retry_delay=15):
+    """Check if database is reachable (retries for sleeping Render free tier)."""
+    db_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
+    if not db_url:
+        return False, "No DATABASE_URL configured"
 
-        engine = create_engine(db_url, connect_args={"connect_timeout": 5})
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True, "Connected"
-    except Exception as e:
-        return False, str(e)
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            engine = create_db_engine(db_url)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True, "Connected"
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+
+    return False, str(last_error)
 
 
 def format_number(num, decimals=2):
@@ -268,7 +284,8 @@ def main():
     # ============================================
     st.title("📈 Stock Market Dashboard")
 
-    db_healthy, db_message = check_database_health()
+    with st.spinner("Connecting to database (may take up to 60s if waking from sleep)..."):
+        db_healthy, db_message = check_database_health()
 
     if not db_healthy:
         st.warning(f"⚠️ Database unavailable: {db_message[:100]}")
